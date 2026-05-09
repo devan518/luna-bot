@@ -1,9 +1,8 @@
 import os
 import logging
 from datetime import timedelta
-import aiohttp
-import dotenv
 import discord
+import dotenv
 from discord.ext import commands
 from discord import app_commands
 import random
@@ -18,7 +17,6 @@ import yt_dlp
 dotenv.load_dotenv()
 
 token = os.getenv("discord_token")
-llm_key = os.getenv("llm_api_key")
 
 handler = logging.FileHandler(filename="discord.log", encoding="utf-8", mode="w")
 
@@ -30,18 +28,18 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 reaction_role_messages = {}
+
 start_time = time.time()
+
 brilliance_count = 0
 replied_on_cooldown = False
 cooldown_end_time = 0
 
+_safe_emojis = None
+
 @bot.event
 async def on_ready():
     print(f"{bot.user} has connected to Discord!")
-
-async def is_tiktok(url):
-    filename = Path(urlparse(url).path).name.lower()
-    return "v120" in filename
 
 @bot.event
 async def on_message(message):
@@ -50,34 +48,8 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    if message.author.id == 1474614117665865730:
-        for attachment in message.attachments:
-            if attachment.content_type and attachment.content_type.startswith("video/"):
-                print(attachment.url)
-
-                if await is_tiktok(attachment.url):
-                    if message.channel.id != 1466849960724271177:
-                        await message.reply(
-                            f"{message.author.name} (yes you in specific i added this just for your ahh) \n"
-                            "stop sending these videos in general \n"
-                            "(resent in #clips and deleting original in 5 seconds)"
-                        )
-
-                        await asyncio.sleep(5)
-
-                        clips_channel = bot.get_channel(1466849960724271177)
-                        if clips_channel:
-                            await clips_channel.send(
-                                content=(
-                                    f"{message.author.name} sent \n'{message.content}'\n"
-                                    + "\n".join(a.url for a in message.attachments)
-                                )
-                            )
-
-                        await message.delete()
-                break
-
-    if message.content.lower().strip() == "actually brilliant":
+    content = message.content
+    if len(content) <= 20 and content.lower().strip() == "actually brilliant":
         current_time = time.time()
 
         if current_time < cooldown_end_time:
@@ -88,7 +60,6 @@ async def on_message(message):
 
         url = "https://cdn.discordapp.com/attachments/1466849815194505525/1499113206688383037/actuallybriliant-kirk.png?ex=69f98c38&is=69f83ab8&hm=f93ad4a5a6c5787f0e65e42735c96cfbdb8afb2af3693578f7475f86aafefd1c"
         await message.reply(url)
-
         brilliance_count += 1
 
         if brilliance_count >= 3:
@@ -101,7 +72,6 @@ async def on_message(message):
 @bot.event
 async def on_member_join(member):
     channel = bot.get_channel(1466850499604254740)
-
     if not channel:
         return
 
@@ -112,7 +82,6 @@ async def on_member_join(member):
         description=f"Welcome {member.mention} to **{member.guild.name}**!\nYou are the **{member_count}th** member!",
         color=discord.Color.blue()
     )
-
     embed.set_thumbnail(url=member.display_avatar.url)
 
     await channel.send(
@@ -202,11 +171,10 @@ async def lie_detect(interaction: discord.Interaction, statement: str = ""):
         await interaction.response.send_message(f"'{statement}', is a lie, shall i freeze the evidence?")
 
 def get_safe_emojis():
-    out = []
-    for e in emoji.EMOJI_DATA.keys():
-        if len(e) <= 2:
-            out.append(e)
-    return out
+    global _safe_emojis
+    if _safe_emojis is None:
+        _safe_emojis = [e for e in emoji.EMOJI_DATA if len(e) <= 2]
+    return _safe_emojis
 
 @bot.tree.command(name="role", description="sends a reaction role message")
 @app_commands.describe(roles="roles NOT to include, separated by commas")
@@ -216,13 +184,10 @@ async def role(interaction: discord.Interaction, roles: str = ""):
         return
 
     excluded_ids = []
-
     for item in roles.split(","):
         item = item.strip()
-
         if not item:
             continue
-
         if item.startswith("<@&") and item.endswith(">"):
             excluded_ids.append(int(item[3:-1]))
         else:
@@ -275,7 +240,6 @@ async def role(interaction: discord.Interaction, roles: str = ""):
                     await msg.add_reaction(emoji_obj)
                 except:
                     pass
-
         except discord.Forbidden:
             await interaction.followup.send("I don't have permission to send messages here.", ephemeral=True)
             break
@@ -325,16 +289,13 @@ async def get_song(query):
     def extract():
         with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
             info = ydl.extract_info(query, download=False)
-
             if "entries" in info:
                 info = info["entries"][0]
-
             return {
                 "title": info.get("title", "Unknown title"),
                 "url": info["url"],
                 "webpage_url": info.get("webpage_url", query)
             }
-
     return await asyncio.to_thread(extract)
 
 async def play_next(guild):
@@ -349,7 +310,6 @@ async def play_next(guild):
     def after_playing(error):
         if error:
             print("Player error:", error)
-
         asyncio.run_coroutine_threadsafe(play_next(guild), bot.loop)
 
     vc.play(discord.FFmpegPCMAudio(song["url"], **FFMPEG_OPTIONS), after=after_playing)
@@ -375,40 +335,33 @@ async def play(interaction: discord.Interaction, query: str):
         else:
             await interaction.followup.send(f"Now playing: **{song['title']}**")
             await play_next(interaction.guild)
-
     except Exception as e:
         await interaction.followup.send(f"yt-dlp couldn't play that: `{type(e).__name__}: {e}`")
 
 @bot.tree.command(name="queue", description="shows the queue")
 async def queue_cmd(interaction: discord.Interaction):
     queue = get_queue(interaction.guild.id)
-
     if not queue:
         await interaction.response.send_message("The queue is empty.")
         return
-
     await interaction.response.send_message("\n".join(f"`{i}.` {s['title']}" for i, s in enumerate(queue, 1)))
 
 @bot.tree.command(name="remove", description="removes a song from queue")
 @app_commands.describe(index="queue index")
 async def remove(interaction: discord.Interaction, index: int):
     queue = get_queue(interaction.guild.id)
-
     if index < 1 or index > len(queue):
         await interaction.response.send_message("That queue index doesn't exist.")
         return
-
     song = queue.pop(index - 1)
     await interaction.response.send_message(f"Removed: **{song['title']}**")
 
 @bot.tree.command(name="skip", description="skips the current song")
 async def skip(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
-
     if not vc or not vc.is_playing():
         await interaction.response.send_message("Nothing is playing.")
         return
-
     vc.stop()
     await interaction.response.send_message("Skipped.")
 
@@ -420,33 +373,27 @@ async def clear(interaction: discord.Interaction):
 @bot.tree.command(name="pause", description="pauses the current song")
 async def pause(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
-
     if not vc or not vc.is_playing():
         await interaction.response.send_message("Nothing is playing.")
         return
-
     vc.pause()
     await interaction.response.send_message("Paused.")
 
 @bot.tree.command(name="resume", description="resumes the current song")
 async def resume(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
-
     if not vc or not vc.is_paused():
         await interaction.response.send_message("Nothing is paused.")
         return
-
     vc.resume()
     await interaction.response.send_message("Resumed.")
 
 @bot.tree.command(name="leave", description="Ends the concert :(")
 async def leave(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
-
     if not vc:
         await interaction.response.send_message("I'm not in a voice channel.")
         return
-
     get_queue(interaction.guild.id).clear()
     await vc.disconnect()
     await interaction.response.send_message("It was a good concert!")
@@ -461,19 +408,17 @@ async def status(interaction: discord.Interaction):
         minutes, seconds = divmod(rem, 60)
 
         guilds = []
-
+        users = 0
         for guild in bot.guilds:
             guilds.append(f"{guild.name}\n")
+            users += guild.member_count or 0
 
-        users = sum(g.member_count or 0 for g in bot.guilds)
         latency = round(bot.latency * 1000)
 
         vc = interaction.guild.voice_client if interaction.guild else None
         voice_status = "Not connected"
-
         if vc:
             voice_status = f"Connected to {vc.channel.name}"
-
             if vc.is_playing():
                 voice_status += " | Playing"
             elif vc.is_paused():
@@ -486,7 +431,6 @@ async def status(interaction: discord.Interaction):
             description="Hmph~ system check complete.",
             color=discord.Color.blue()
         )
-
         embed.add_field(name="Bot", value=f"{bot.user}", inline=True)
         embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
         embed.add_field(name="Uptime", value=f"{hours}h {minutes}m {seconds}s", inline=True)
@@ -496,12 +440,10 @@ async def status(interaction: discord.Interaction):
 
         queue_len = len(get_queue(interaction.guild.id)) if interaction.guild else 0
         embed.add_field(name="Music", value=f"Queue: {queue_len}", inline=True)
-
         embed.add_field(name="Voice", value=voice_status, inline=False)
         embed.add_field(name="Python", value=platform.python_version(), inline=True)
         embed.add_field(name="discord.py", value=discord.__version__, inline=True)
         embed.add_field(name="OS", value=platform.system(), inline=True)
-
         embed.add_field(
             name="Intents",
             value=(
@@ -513,7 +455,6 @@ async def status(interaction: discord.Interaction):
         )
 
         await interaction.followup.send(embed=embed)
-
     except Exception as e:
         await interaction.followup.send(f"status crashed: `{type(e).__name__}: {e}`")
         raise
