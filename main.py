@@ -142,6 +142,7 @@ async def emote(interaction: discord.Interaction, emote: app_commands.Choice[str
         "Default": "https://static.wikia.nocookie.net/marvel-rivals/images/0/00/Luna_Snow_Emote_-_DEFAULT_Full.mp4",
         "BRAIN_BLAST": "https://static.wikia.nocookie.net/marvel-rivals/images/e/ed/Luna_Snow_Emote_-_BRAIN_BLAST_Full.mp4",
         "Take_A_Seat": "https://static.wikia.nocookie.net/marvel-rivals/images/e/ed/Luna_Snow_Emote_-_Take_A_Seat_Full.mp4",
+        "ballin":"https://cdn.discordapp.com/attachments/1466849815194505525/1502761690574360586/image.png?ex=6a00e362&is=69ff91e2&hm=0c069f1051fc6aff79c8bf148cfd84e443caf3df849b4a1900b315b6181baf29"
     }
 
     lines = {
@@ -155,6 +156,7 @@ async def emote(interaction: discord.Interaction, emote: app_commands.Choice[str
         "Default": "hi!",
         "BRAIN_BLAST": "'no clue what to make this line' - devan",
         "Take_A_Seat": "I've been standing for so long!",
+        "ballin": "LEBRONNN",
     }
 
     await interaction.response.send_message(f"[{lines[emote.value]}]({emotes[emote.value]})")
