@@ -19,7 +19,6 @@ handler = logging.FileHandler(filename="discord.log", encoding="utf-8", mode="w"
 
 intents = discord.Intents.default()
 intents.message_content = True
-intents.members = True
 intents.voice_states = True
 
 bot = commands.Bot(command_prefix="/", intents=intents)
@@ -65,26 +64,6 @@ async def on_message(message):
             replied_on_cooldown = False
 
     await bot.process_commands(message)
-
-@bot.event
-async def on_member_join(member):
-    channel = bot.get_channel(1466850499604254740)
-    if not channel:
-        return
-
-    member_count = member.guild.member_count
-
-    embed = discord.Embed(
-        title=f"Welcome {member.display_name}!",
-        description=f"Welcome {member.mention} to **{member.guild.name}**!\nYou are the **{member_count}th** member!",
-        color=discord.Color.blue()
-    )
-    embed.set_thumbnail(url=member.display_avatar.url)
-
-    await channel.send(
-        content=f"Welcome {member.mention} to **{member.guild.name}**! You are the {member_count}th member!",
-        embed=embed
-    )
 
 SYNC_ROLE_IDS = {
     1480054058210562110,
@@ -270,7 +249,7 @@ async def on_reaction_remove(reaction, user):
 music_queues = {}
 
 YTDL_OPTIONS = {
-    "format": "bestaudio[abr<=128]/bestaudio/best",
+    "format": "bestaudio[abr<=64]/worstaudio/worst",
     "quiet": True,
     "noplaylist": True,
     "default_search": "ytsearch1"
@@ -278,7 +257,7 @@ YTDL_OPTIONS = {
 
 FFMPEG_OPTIONS = {
     "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options": "-vn"
+    "options": "-vn -threads 1"
 }
 
 def get_queue(guild_id):
