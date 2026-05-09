@@ -2,7 +2,6 @@ import os
 import logging
 from datetime import timedelta
 import discord
-import dotenv
 from discord.ext import commands
 from discord import app_commands
 import random
@@ -13,8 +12,6 @@ import asyncio
 from urllib.parse import urlparse
 from pathlib import Path
 import yt_dlp
-
-dotenv.load_dotenv()
 
 token = os.getenv("discord_token")
 
