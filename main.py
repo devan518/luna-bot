@@ -290,7 +290,7 @@ async def play_next(guild):
             print("Player error:", error)
         asyncio.run_coroutine_threadsafe(play_next(guild), bot.loop)
 
-    vc.play(discord.FFmpegPCMAudio(song["url"], **FFMPEG_OPTIONS), after=after_playing)
+    vc.play(discord.FFmpegOpusAudio(song["url"], **FFMPEG_OPTIONS, bitrate=64), after=after_playing)
 
 @bot.tree.command(name="play", description="adds music to the queue")
 @app_commands.describe(query="song name or yt-dlp supported url")
