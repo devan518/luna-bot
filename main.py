@@ -38,6 +38,18 @@ cooldown_end_time = 0
 
 _safe_emojis = None
 
+async def heartbeat_check():
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        await asyncio.sleep(60)
+        if bot.latency == float('inf'):
+            print("Lost connection, reconnecting...")
+            await bot.close()
+
+@bot.event
+async def setup_hook():
+    bot.loop.create_task(heartbeat_check())
+
 @bot.event
 async def on_ready():
     print(f"{bot.user} has connected to Discord!")
