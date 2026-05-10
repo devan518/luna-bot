@@ -1,6 +1,5 @@
 import os
 import logging
-from datetime import timedelta
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -9,11 +8,14 @@ import emoji
 import platform
 import time
 import asyncio
-from urllib.parse import urlparse
-from pathlib import Path
 import yt_dlp
+from tinydb import TinyDB, Query
 
 token = os.getenv("discord_token")
+db = TinyDB("db.json")
+lb = db.table("leaderboard")
+quests = db.table("quests")
+pending = db.table("pending")
 
 handler = logging.FileHandler(filename="discord.log", encoding="utf-8", mode="w")
 
@@ -24,6 +26,8 @@ intents.voice_states = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 reaction_role_messages = {}
+mod_roles = {1480054058210562110, 1480053527509471375, 1480056423000838145, 1466855469325750547}
+APPROVAL_CHANNEL = 1502805535848927303
 
 start_time = time.time()
 
@@ -65,12 +69,126 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-SYNC_ROLE_IDS = {
-    1480054058210562110,
-    1480053527509471375,
-    1480056423000838145,
-    1466855469325750547
-}
+@bot.tree.command(name="quest", description="creates a quest")
+async def quest(interaction: discord.Interaction, name: str, description: str, points: int):
+    if not any(role.id in mod_roles for role in interaction.user.roles):
+        await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
+        return
+
+    Q = Query()
+    if quests.search(Q.name == name):
+        await interaction.response.send_message(f"a quest named **{name}** already exists.", ephemeral=True)
+        return
+
+    quests.insert({"name": name, "description": description, "points": points})
+    await interaction.response.send_message(f"quest **{name}** created! ({points} pts) — {description}")
+
+@bot.tree.command(name="quests", description="shows all available quests")
+async def quests_cmd(interaction: discord.Interaction):
+    all_quests = quests.all()
+    if not all_quests:
+        await interaction.response.send_message("no quests available right now.")
+        return
+
+    embed = discord.Embed(title="Quests", color=discord.Color.orange())
+    for q in all_quests:
+        embed.add_field(name=f"{q['name']} — {q['points']} pts", value=q['description'], inline=False)
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="complete_quest", description="submit a quest completion for approval")
+async def complete_quest(interaction: discord.Interaction, quest_name: str, proof: discord.Attachment):
+    Q = Query()
+    result = quests.search(Q.name == quest_name)
+    if not result:
+        await interaction.response.send_message(f"no quest named **{quest_name}** found.", ephemeral=True)
+        return
+
+    q = result[0]
+    channel = bot.get_channel(APPROVAL_CHANNEL)
+    if not channel:
+        await interaction.response.send_message("approval channel not found.", ephemeral=True)
+        return
+
+    embed = discord.Embed(
+        title="Quest Completion Request",
+        color=discord.Color.yellow()
+    )
+    embed.add_field(name="User", value=interaction.user.mention, inline=True)
+    embed.add_field(name="Quest", value=q["name"], inline=True)
+    embed.add_field(name="Points", value=str(q["points"]), inline=True)
+    embed.add_field(name="Proof", value=proof.url, inline=False)
+
+    msg = await channel.send(embed=embed)
+
+    pending.insert({
+        "message_id": msg.id,
+        "user_id": interaction.user.id,
+        "username": str(interaction.user),
+        "quest_name": q["name"],
+        "points": q["points"]
+    })
+
+    await interaction.response.send_message(f"submitted! waiting for mod approval.", ephemeral=True)
+
+@bot.tree.command(name="approve_quest", description="approves a quest completion by message id")
+async def approve_quest(interaction: discord.Interaction, message_id: str):
+    if not any(role.id in mod_roles for role in interaction.user.roles):
+        await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
+        return
+
+    P = Query()
+    result = pending.search(P.message_id == int(message_id))
+    if not result:
+        await interaction.response.send_message("no pending request found with that message id.", ephemeral=True)
+        return
+
+    entry = result[0]
+    user_id = entry["user_id"]
+    username = entry["username"]
+    points = entry["points"]
+    quest_name = entry["quest_name"]
+
+    L = Query()
+    existing = lb.search(L.user_id == user_id)
+    if existing:
+        lb.update({"points": existing[0]["points"] + points}, L.user_id == user_id)
+    else:
+        lb.insert({"user_id": user_id, "username": username, "points": points})
+
+    pending.remove(P.message_id == int(message_id))
+
+    channel = bot.get_channel(APPROVAL_CHANNEL)
+    if channel:
+        try:
+            msg = await channel.fetch_message(int(message_id))
+            embed = msg.embeds[0]
+            embed.color = discord.Color.green()
+            embed.set_footer(text=f"approved by {interaction.user}")
+            await msg.edit(embed=embed)
+        except:
+            pass
+
+    await interaction.response.send_message(f"approved! **{username}** gets {points} pts for **{quest_name}**.")
+
+@bot.tree.command(name="leaderboard", description="shows the current leaderboard")
+async def leaderboard(interaction: discord.Interaction):
+    all_entries = lb.all()
+    if not all_entries:
+        await interaction.response.send_message("leaderboard is empty.")
+        return
+
+    sorted_entries = sorted(all_entries, key=lambda x: x["points"], reverse=True)[:50]
+
+    embed = discord.Embed(colour=discord.Color.orange(), title="Leaderboard")
+    lines = [f"`{i+1}.` {e['username']} — **{e['points']} pts**" for i, e in enumerate(sorted_entries)]
+    embed.add_field(name="top 50", value="\n".join(lines), inline=False)
+
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="repeat", description="just repeats what u want it to say lol")
+async def repeat(interaction: discord.Interaction, text: str):
+    await interaction.response.send_message(text)
 
 @bot.tree.command(name="sync", description="syncs slash commands")
 async def sync(interaction: discord.Interaction):
@@ -78,7 +196,7 @@ async def sync(interaction: discord.Interaction):
         await interaction.response.send_message("server only.", ephemeral=True)
         return
 
-    if not any(role.id in SYNC_ROLE_IDS for role in interaction.user.roles):
+    if not any(role.id in mod_roles for role in interaction.user.roles):
         await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
         return
 
@@ -118,7 +236,7 @@ async def emote(interaction: discord.Interaction, emote: app_commands.Choice[str
         "Default": "https://static.wikia.nocookie.net/marvel-rivals/images/0/00/Luna_Snow_Emote_-_DEFAULT_Full.mp4",
         "BRAIN_BLAST": "https://static.wikia.nocookie.net/marvel-rivals/images/e/ed/Luna_Snow_Emote_-_BRAIN_BLAST_Full.mp4",
         "Take_A_Seat": "https://static.wikia.nocookie.net/marvel-rivals/images/e/ed/Luna_Snow_Emote_-_Take_A_Seat_Full.mp4",
-        "ballin":"https://cdn.discordapp.com/attachments/1466849815194505525/1502761690574360586/image.png?ex=6a00e362&is=69ff91e2&hm=0c069f1051fc6aff79c8bf148cfd84e443caf3df849b4a1900b315b6181baf29"
+        "ballin": "https://cdn.discordapp.com/attachments/1466849815194505525/1502761690574360586/image.png?ex=6a00e362&is=69ff91e2&hm=0c069f1051fc6aff79c8bf148cfd84e443caf3df849b4a1900b315b6181baf29"
     }
 
     lines = {
@@ -249,15 +367,16 @@ async def on_reaction_remove(reaction, user):
 music_queues = {}
 
 YTDL_OPTIONS = {
-    "format": "bestaudio[abr<=64]/worstaudio/worst",
+    "format": "bestaudio[ext=webm][acodec=opus]/bestaudio[abr<=64]/worstaudio",
     "quiet": True,
     "noplaylist": True,
-    "default_search": "ytsearch1"
+    "default_search": "ytsearch1",
+    "extractor_args": {"youtube": {"skip": ["hls", "dash"]}}
 }
 
 FFMPEG_OPTIONS = {
-    "before_options": "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options": "-vn -threads 1"
+    "before_options": "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "options": "-vn -threads 1 -bufsize 512k"
 }
 
 def get_queue(guild_id):
