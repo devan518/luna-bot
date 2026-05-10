@@ -8,8 +8,8 @@ import emoji
 import platform
 import time
 import asyncio
-import yt_dlp
 from tinydb import TinyDB, Query
+from pytubefix import Search, YouTube
 
 token = os.getenv("discord_token")
 db = TinyDB("db.json")
@@ -269,7 +269,8 @@ async def test(interaction: discord.Interaction):
     app_commands.Choice(name="Little Oopsie", value="Little_Oopsie"),
     app_commands.Choice(name="Default", value="Default"),
     app_commands.Choice(name="BRAIN BLAST", value="BRAIN_BLAST"),
-    app_commands.Choice(name="Take A Seat", value="Take_A_Seat")
+    app_commands.Choice(name="Take A Seat", value="Take_A_Seat"),
+    app_commands.Choice(name="ballin", value="ballin")
 ])
 async def emote(interaction: discord.Interaction, emote: app_commands.Choice[str]):
     emotes = {
@@ -413,17 +414,9 @@ async def on_reaction_remove(reaction, user):
 
 music_queues = {}
 
-YTDL_OPTIONS = {
-    "format": "bestaudio[ext=webm][acodec=opus]/bestaudio[abr<=64]/worstaudio",
-    "quiet": True,
-    "noplaylist": True,
-    "default_search": "ytsearch1",
-    "extractor_args": {"youtube": {"skip": ["hls", "dash"]}}
-}
-
 FFMPEG_OPTIONS = {
     "before_options": "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options": "-vn -threads 1 -bufsize 512k"
+    "options": "-vn -threads 1 -application lowdelay -bufsize 64k"
 }
 
 def get_queue(guild_id):
@@ -431,56 +424,45 @@ def get_queue(guild_id):
 
 async def get_song(query):
     def extract():
-        with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ydl:
-            info = ydl.extract_info(query, download=False)
-            if "entries" in info:
-                info = info["entries"][0]
-            return {
-                "title": info.get("title", "Unknown title"),
-                "url": info["url"],
-                "webpage_url": info.get("webpage_url", query)
-            }
+        yt = Search(query).videos[0] if not query.startswith("http") else YouTube(query)
+        stream = yt.streams.filter(only_audio=True, subtype="webm").order_by("abr").first()
+        if not stream:
+            stream = yt.streams.filter(only_audio=True).order_by("abr").first()
+        return {"title": yt.title, "url": stream.url, "webpage_url": yt.watch_url}
     return await asyncio.to_thread(extract)
 
 async def play_next(guild):
     queue = get_queue(guild.id)
     vc = guild.voice_client
-
     if not vc or not queue:
         return
-
     song = queue.pop(0)
-
-    def after_playing(error):
+    fresh = await get_song(song["webpage_url"])
+    def after(error):
         if error:
             print("Player error:", error)
         asyncio.run_coroutine_threadsafe(play_next(guild), bot.loop)
-
-    vc.play(discord.FFmpegOpusAudio(song["url"], **FFMPEG_OPTIONS, bitrate=64), after=after_playing)
+    vc.play(discord.FFmpegOpusAudio(fresh["url"], **FFMPEG_OPTIONS, bitrate=64), after=after)
 
 @bot.tree.command(name="play", description="adds music to the queue")
-@app_commands.describe(query="song name or yt-dlp supported url")
+@app_commands.describe(query="song name or url")
 async def play(interaction: discord.Interaction, query: str):
     if not interaction.user.voice:
         await interaction.response.send_message("Join a voice channel first.")
         return
-
     await interaction.response.defer()
-
     vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect(timeout=10.0)
-
     try:
         song = await get_song(query)
         queue = get_queue(interaction.guild.id)
         queue.append(song)
-
         if vc.is_playing() or vc.is_paused():
             await interaction.followup.send(f"Added to queue: **{song['title']}**\nPosition: `{len(queue)}`")
         else:
             await interaction.followup.send(f"Now playing: **{song['title']}**")
             await play_next(interaction.guild)
     except Exception as e:
-        await interaction.followup.send(f"yt-dlp couldn't play that: `{type(e).__name__}: {e}`")
+        await interaction.followup.send(f"couldn't play that: `{type(e).__name__}: {e}`")
 
 @bot.tree.command(name="queue", description="shows the queue")
 async def queue_cmd(interaction: discord.Interaction):
@@ -497,8 +479,7 @@ async def remove(interaction: discord.Interaction, index: int):
     if index < 1 or index > len(queue):
         await interaction.response.send_message("That queue index doesn't exist.")
         return
-    song = queue.pop(index - 1)
-    await interaction.response.send_message(f"Removed: **{song['title']}**")
+    await interaction.response.send_message(f"Removed: **{queue.pop(index - 1)['title']}**")
 
 @bot.tree.command(name="skip", description="skips the current song")
 async def skip(interaction: discord.Interaction):
