@@ -23,6 +23,7 @@ handler = logging.FileHandler(filename="discord.log", encoding="utf-8", mode="w"
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
+intents.members = True
 
 bot = commands.Bot(command_prefix="/", intents=intents)
 
@@ -38,17 +39,13 @@ cooldown_end_time = 0
 
 _safe_emojis = None
 
-async def heartbeat_check():
-    await bot.wait_until_ready()
-    while not bot.is_closed():
-        await asyncio.sleep(60)
-        if bot.latency == float('inf'):
-            print("Lost connection, reconnecting...")
-            await bot.close()
+@bot.event
+async def on_disconnect():
+    print("Disconnected from Discord gateway")
 
 @bot.event
-async def setup_hook():
-    bot.loop.create_task(heartbeat_check())
+async def on_resumed():
+    print("Resumed Discord gateway session")
 
 @bot.event
 async def on_ready():
