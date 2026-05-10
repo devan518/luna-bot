@@ -17,6 +17,7 @@ lb = db.table("leaderboard")
 quests = db.table("quests")
 pending = db.table("pending")
 
+
 handler = logging.FileHandler(filename="discord.log", encoding="utf-8", mode="w")
 
 intents = discord.Intents.default()
@@ -28,7 +29,7 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 reaction_role_messages = {}
 mod_roles = {1480054058210562110, 1480053527509471375, 1480056423000838145, 1466855469325750547}
 APPROVAL_CHANNEL = 1502805535848927303
-
+OWNER_ID = 1020374865410277406
 start_time = time.time()
 
 brilliance_count = 0
@@ -71,7 +72,7 @@ async def on_message(message):
 
 @bot.tree.command(name="quest", description="creates a quest")
 async def quest(interaction: discord.Interaction, name: str, description: str, points: int):
-    if not any(role.id in mod_roles for role in interaction.user.roles):
+    if interaction.user.id != OWNER_ID:
         await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
         return
 
@@ -80,8 +81,22 @@ async def quest(interaction: discord.Interaction, name: str, description: str, p
         await interaction.response.send_message(f"a quest named **{name}** already exists.", ephemeral=True)
         return
 
-    quests.insert({"name": name, "description": description, "points": points})
-    await interaction.response.send_message(f"quest **{name}** created! ({points} pts) — {description}")
+    doc_id = quests.insert({"name": name, "description": description, "points": points})
+    await interaction.response.send_message(f"quest **{name}** created! (id: `{doc_id}`, {points} pts) — {description}")
+
+@bot.tree.command(name="delete_quest", description="deletes a quest by id")
+async def delete_quest(interaction: discord.Interaction, quest_id: int):
+    if interaction.user.id != OWNER_ID:
+        await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
+        return
+
+    result = quests.get(doc_id=quest_id)
+    if not result:
+        await interaction.response.send_message(f"no quest with id `{quest_id}` found.", ephemeral=True)
+        return
+
+    quests.remove(doc_ids=[quest_id])
+    await interaction.response.send_message(f"quest **{result['name']}** (id: `{quest_id}`) deleted.")
 
 @bot.tree.command(name="quests", description="shows all available quests")
 async def quests_cmd(interaction: discord.Interaction):
@@ -92,19 +107,25 @@ async def quests_cmd(interaction: discord.Interaction):
 
     embed = discord.Embed(title="Quests", color=discord.Color.orange())
     for q in all_quests:
-        embed.add_field(name=f"{q['name']} — {q['points']} pts", value=q['description'], inline=False)
+        embed.add_field(name=f"[{q.doc_id}] {q['name']} — {q['points']} pts", value=q['description'], inline=False)
 
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="complete_quest", description="submit a quest completion for approval")
-async def complete_quest(interaction: discord.Interaction, quest_name: str, proof: discord.Attachment):
+async def complete_quest(interaction: discord.Interaction, quest_id: int, proof: discord.Attachment):
     Q = Query()
-    result = quests.search(Q.name == quest_name)
+    result = quests.get(doc_id=quest_id)
     if not result:
-        await interaction.response.send_message(f"no quest named **{quest_name}** found.", ephemeral=True)
+        await interaction.response.send_message(f"no quest with id `{quest_id}` found.", ephemeral=True)
         return
 
-    q = result[0]
+    q = result
+
+    already_pending = pending.search((Q.user_id == interaction.user.id) & (Q.quest_name == q["name"]))
+    if already_pending:
+        await interaction.response.send_message(f"you already have a pending submission for **{q['name']}**.", ephemeral=True)
+        return
+
     channel = bot.get_channel(APPROVAL_CHANNEL)
     if not channel:
         await interaction.response.send_message("approval channel not found.", ephemeral=True)
@@ -117,9 +138,8 @@ async def complete_quest(interaction: discord.Interaction, quest_name: str, proo
     embed.add_field(name="User", value=interaction.user.mention, inline=True)
     embed.add_field(name="Quest", value=q["name"], inline=True)
     embed.add_field(name="Points", value=str(q["points"]), inline=True)
-    embed.add_field(name="Proof", value=proof.url, inline=False)
 
-    msg = await channel.send(embed=embed)
+    msg = await channel.send(content=proof.url, embed=embed)
 
     pending.insert({
         "message_id": msg.id,
@@ -133,7 +153,7 @@ async def complete_quest(interaction: discord.Interaction, quest_name: str, proo
 
 @bot.tree.command(name="approve_quest", description="approves a quest completion by message id")
 async def approve_quest(interaction: discord.Interaction, message_id: str):
-    if not any(role.id in mod_roles for role in interaction.user.roles):
+    if interaction.user.id != OWNER_ID:
         await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
         return
 
@@ -185,6 +205,21 @@ async def leaderboard(interaction: discord.Interaction):
     embed.add_field(name="top 50", value="\n".join(lines), inline=False)
 
     await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="set_points", description="sets a user's points to a given value")
+async def set_points(interaction: discord.Interaction, username: str, points: int):
+    if interaction.user.id != OWNER_ID:
+        await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
+        return
+
+    L = Query()
+    result = lb.search(L.username == username)
+    if not result:
+        await interaction.response.send_message(f"no user **{username}** found on the leaderboard.", ephemeral=True)
+        return
+
+    lb.update({"points": points}, L.username == username)
+    await interaction.response.send_message(f"**{username}**'s points set to {points}.")
 
 @bot.tree.command(name="repeat", description="just repeats what u want it to say lol")
 async def repeat(interaction: discord.Interaction, text: str):
