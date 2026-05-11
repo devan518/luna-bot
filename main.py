@@ -10,7 +10,11 @@ import time
 import asyncio
 from tinydb import TinyDB, Query
 from pytubefix import Search, YouTube
+import aiohttp
+from urllib.parse import quote
+from ollamafreeapi import OllamaFreeAPI
 
+llm_api_key = os.getenv('pollinations_key')
 token = os.getenv("discord_token")
 db = TinyDB("db.json")
 lb = db.table("leaderboard")
@@ -33,6 +37,8 @@ APPROVAL_CHANNEL = 1502805535848927303
 OWNER_ID = 1020374865410277406
 start_time = time.time()
 
+client = OllamaFreeAPI()
+
 brilliance_count = 0
 replied_on_cooldown = False
 cooldown_end_time = 0
@@ -54,12 +60,26 @@ async def on_ready():
 @bot.event
 async def on_message(message):
     global brilliance_count, replied_on_cooldown, cooldown_end_time
-
     if message.author.bot:
         return
 
-    content = message.content
-    if len(content) <= 20 and content.lower().strip() == "actually brilliant":
+    if isinstance(message.channel, discord.DMChannel):
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"https://gen.pollinations.ai/text/{quote(message.content)}",headers={"Authorization": f"Bearer {llm_api_key}"},params={"model": "nova-fast","seed": "0","system": "","json": "false","temperature": "1","stream": "false","safe": ""}) as response:
+                try:
+                    text = await response.text()
+                    if text.startswith("{"): #it returns a json when there is an error 
+                        raise Exception
+                    await message.reply(text.encode("ascii", "ignore").decode()[:2000]) #sometimes response includes trailing binary characters for some reason
+                    #[:2000] for discord character limit
+                except Exception:
+                    try:
+                        ollmaresponse = client.chat(model="llama3.2:3b", prompt=message.content, temperature=0.7)
+                        await message.reply(ollmaresponse[:2000])
+                    except Exception as e:
+                        await message.reply(f"im currently being dived!! \n{e}")
+
+    if message.content.lower().strip() == "actually brilliant":
         current_time = time.time()
 
         if current_time < cooldown_end_time:
