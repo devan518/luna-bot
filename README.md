@@ -32,21 +32,12 @@
 ---
 <div align="center">
 
-> **Note:** Some features/databases are currently tailored for the original server this was meant forlike leaderboards, quests, and mod roles. This will be fixed in a patch update.
+> **Note:** Some features/databases are currently tailored for the original server, such as leaderboards, quests, and mod roles. This will be fixed in a patch update.
 
 <br>
-
-<table>
-  <tr>
-    <td align="center">
-      <strong>self hosting mfs reading ts</strong><br><br>
-      <img src="https://media1.tenor.com/m/Cr4O1UH4q0oAAAAd/no-ears-can%27t-hear.gif" width="220" alt="self hosting reaction">
-    </td>
-  </tr>
-</table>
+> **Update:** Rewrote database in firebase, will update new global features tommorrow
 
 </div>
-
 ## Table of Contents
 
 1. [About](#about)
