@@ -29,6 +29,10 @@
   <a href="https://github.com/devan518/luna-bot/issues/new?labels=enhancement">request feature (near instant response)</a>
 </p>
 
+> **Note:** for some reason adding the character "/" or "\" in the name in /quest will just say "the application did not respond", refrain from doing this until it is patched!
+<img width="486" height="212" alt="image" src="https://github.com/user-attachments/assets/3585cddd-3298-4abe-903a-4b54f87d06c2" />
+
+
 ## Table of Contents
 
 1. [About](#about)
