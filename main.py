@@ -427,14 +427,17 @@ async def repeat(interaction: discord.Interaction, text: str):
 
 @bot.tree.command(name="sync", description="syncs slash commands")
 async def sync(interaction: discord.Interaction):
-    if interaction.guild is None:
-        await interaction.response.send_message("server only.", ephemeral=True)
-        return
-
-    mod_roles = get_mod_roles(interaction.guild.id)
-    if not any(role.id in mod_roles for role in interaction.user.roles):
-        await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
-        return
+    mod_roles =     get_mod_roles(interaction.guild.id)
+if (
+    interaction.user.id != OWNER_ID
+    and not interaction.user.guild_permissions.administrator
+    and not any(role.id in mod_roles for role in interaction.user.roles)
+):
+    await interaction.response.send_message(
+        "you don't have permission to use this.",
+        ephemeral=True
+    )
+    return
 
     await interaction.response.defer(ephemeral=True)
     synced = await bot.tree.sync()
