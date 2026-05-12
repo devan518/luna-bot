@@ -29,15 +29,6 @@
   <a href="https://github.com/devan518/luna-bot/issues/new?labels=enhancement">Request Feature</a>
 </p>
 
----
-<div align="center">
-
-> **Note:** Some features/databases are currently tailored for the original server, such as leaderboards, quests, and mod roles. This will be fixed in a patch update.
----
-> **Update:** Rewrote database in firebase, will update new global features tommorrow
-
-</div>
-
 ## Table of Contents
 
 1. [About](#about)
@@ -71,37 +62,6 @@ Click [here](https://discord.com/oauth2/authorize?client_id=1496972614722257107&
 
 Then give LunaBot a role with appropriate permissions — ideally your default mod role or a role with the highest position in your role list so she can assign roles correctly.
 
-## Self-hosting
-
-1. Clone the repo
-   ```sh
-   git clone https://github.com/devan518/luna-bot.git
-   cd luna-bot
-   ```
-
-2. Install dependencies
-   ```sh
-   pip install -r requirements.txt
-   ```
-
-3. Set your bot token as an environment variable, as well as your [pollinations api key](https://github.com/pollinations/pollinations)
-   ```sh
-   export discord_token=YOUR_TOKEN_HERE
-   export llm_api_key=YOUR_API_KEY_HERE
-   ```
-
-4. Run the bot
-   ```sh
-   python main.py
-   ```
-
-5. Sync slash commands in your server
-   ```
-   /sync
-   ```
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
 ---
 
 ## Commands
@@ -113,7 +73,6 @@ Then give LunaBot a role with appropriate permissions — ideally your default m
 | `/emote` | Luna breaks it down — pick from her Marvel Rivals emotes |
 | `/lie-detect` | Luna determines whether your statement is true or not |
 | `/repeat` | Luna repeats whatever you tell her to say |
-| `/test` | Test command |
 
 ### 🎵 Music
 
