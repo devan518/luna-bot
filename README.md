@@ -94,18 +94,26 @@ Then give LunaBot a role with appropriate permissions — ideally your default m
 | `/quests` | View all available quests |
 | `/complete_quest` | Submit a quest completion with proof for mod approval |
 | `/leaderboard` | View the top 50 points leaderboard |
-| `/quest` *(mod)* | Create a new quest |
-| `/delete_quest` *(mod)* | Delete a quest by ID |
-| `/approve_quest` *(mod)* | Approve a quest completion by message ID |
-| `/set_points` *(mod)* | Set a user's points to a specific value |
+| `/quest` *(questmaster)* | Create a new quest |
+| `/delete_quest` *(questmaster)* | Delete a quest by ID |
+| `/approve_quest` *(questmaster)* | Approve a quest completion by message ID |
+| `/set_points` *(questmaster)* | Set a user's points to a specific value |
+
+
+> **Note:** by "questmaster" i mean the role needs to be a role exactly named "questmaster", i added this because mods could've cheated on quests and the leaderboard, 
+> give this role to someone you trust 
+
 
 ### ⚙️ Server
 
 | Command | Description |
 |---|---|
-| `/role` | Send a reaction role message for all server roles |
+| `/role` *(mod)* | Send a reaction role message for all server roles |
 | `/sync` *(mod)* | Sync slash commands |
 | `/status` | View bot status, uptime, latency, and more |
+
+
+> **Note:** by "mod", i mean a role with mod permissions that is explicitly named either "Mod", "mod", or "MOD"
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
