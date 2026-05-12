@@ -24,9 +24,9 @@
   </a>
   <br />
   <br />
-  <a href="https://github.com/devan518/luna-bot/issues/new?labels=bug">Report Bug</a>
+  <a href="https://github.com/devan518/luna-bot/issues/new?labels=bug">report bug</a>
   ·
-  <a href="https://github.com/devan518/luna-bot/issues/new?labels=enhancement">Request Feature</a>
+  <a href="https://github.com/devan518/luna-bot/issues/new?labels=enhancement">request feature (near instant response)</a>
 </p>
 
 ## Table of Contents
@@ -41,13 +41,13 @@
 
 ## About
 
-LunaBot is a Discord bot themed around **Luna Snow** from Marvel Rivals. Her personality, responses, and features are all designed around the character — from playing her emotes to running a server quest & points system.
+LunaBot is a Discord bot themed around **Luna Snow** from Marvel Rivals. Her personality, responses, and features are all designed around the character!
 
 Built with:
 
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![discord.py](https://img.shields.io/badge/discord.py-5865F2?style=for-the-badge&logo=discord&logoColor=white)
-![TinyDB](https://img.shields.io/badge/TinyDB-lightgrey?style=for-the-badge)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
 ![pytubefix](https://img.shields.io/badge/pytubefix-FF0000?style=for-the-badge&logo=youtube&logoColor=white)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
