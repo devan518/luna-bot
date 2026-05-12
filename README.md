@@ -37,6 +37,7 @@
 > **Update:** Rewrote database in firebase, will update new global features tommorrow
 
 </div>
+
 ## Table of Contents
 
 1. [About](#about)
