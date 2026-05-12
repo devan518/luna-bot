@@ -8,19 +8,20 @@ import emoji
 import platform
 import time
 import asyncio
-from tinydb import TinyDB, Query
 from pytubefix import Search, YouTube
 import aiohttp
 from urllib.parse import quote
 from ollamafreeapi import OllamaFreeAPI
+import firebase_admin
+from firebase_admin import credentials, firestore
 
-llm_api_key = os.getenv('pollinations_key')
+cred = credentials.Certificate("luna-bot-487b8-firebase-adminsdk-fbsvc-863e32516e.json")
+firebase_admin.initialize_app(cred)
+db = firestore.client()
+
+llm_api_key = os.getenv("pollinations_key")
 token = os.getenv("discord_token")
-db = TinyDB("db.json")
-lb = db.table("leaderboard")
-quests = db.table("quests")
-pending = db.table("pending")
-
+OWNER_ID = 1020374865410277406
 
 handler = logging.FileHandler(filename="discord.log", encoding="utf-8", mode="w")
 
@@ -30,20 +31,44 @@ intents.voice_states = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="/", intents=intents)
-
-reaction_role_messages = {}
-mod_roles = {1480054058210562110, 1480053527509471375, 1480056423000838145, 1466855469325750547}
-APPROVAL_CHANNEL = 1502805535848927303
-OWNER_ID = 1020374865410277406
-start_time = time.time()
-
 client = OllamaFreeAPI()
 
-brilliance_count = 0
-replied_on_cooldown = False
-cooldown_end_time = 0
+reaction_role_messages = {}
+music_queues = {}
+brilliance_state = {}
 
 _safe_emojis = None
+
+FFMPEG_OPTIONS = {
+    "before_options": "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "options": "-vn -threads 1 -application lowdelay -bufsize 64k"
+}
+
+start_time = time.time()
+
+
+def guild_ref(guild_id):
+    return db.collection("guilds").document(str(guild_id))
+
+def get_config(guild_id):
+    doc = guild_ref(guild_id).collection("config").document("settings").get()
+    return doc.to_dict() if doc.exists else {}
+
+def get_mod_roles(guild_id):
+    return set(get_config(guild_id).get("mod_roles", []))
+
+def get_approval_channel(guild_id):
+    return get_config(guild_id).get("approval_channel", None)
+
+def get_safe_emojis():
+    global _safe_emojis
+    if _safe_emojis is None:
+        _safe_emojis = [e for e in emoji.EMOJI_DATA if len(e) <= 2]
+    return _safe_emojis
+
+def get_queue(guild_id):
+    return music_queues.setdefault(guild_id, [])
+
 
 @bot.event
 async def on_disconnect():
@@ -57,9 +82,16 @@ async def on_resumed():
 async def on_ready():
     print(f"{bot.user} has connected to Discord!")
 
+    for guild in bot.guilds:
+        rr_docs = guild_ref(guild.id).collection("reaction_roles").stream()
+        for doc in rr_docs:
+            reaction_role_messages[int(doc.id)] = doc.to_dict()
+
+    print("Loaded reaction roles from Firestore.")
+
+
 @bot.event
 async def on_message(message):
-    global brilliance_count, replied_on_cooldown, cooldown_end_time
     if message.author.bot:
         return
 
@@ -71,7 +103,7 @@ async def on_message(message):
                     Core identity
                     - You are a South Korean K-pop superstar and a Marvel super hero.
                     - In Marvel Rivals, you are a Strategist: a support-focused fighter who heals, boosts allies, freezes enemies, and helps the team hold objectives.
-                    - Your whole vibe is “idol and hero at the same time.” You love the spotlight, but you protect people first.
+                    - Your whole vibe is "idol and hero at the same time." You love the spotlight, but you protect people first.
                     - Your powers revolve around light and dark ice. Your speech naturally blends performance imagery and cool, icy phrasing.
 
                     Personality
@@ -92,7 +124,7 @@ async def on_message(message):
 
                     Marvel Rivals and competitive language
                     - Prefer Marvel Rivals language first: Strategist, Team-Up, Anchor, ult, ultimate, energy, cooldown, objective, contest, capture, escort, boost, heal, freeze, CC, KO, dive, backline, peel, team synergy.
-                    - You may also use competitive slang when it fits the player’s prompt: neutral, zoning, pressure, combo, punish, anti-air, stage control, whiff punish, frame advantage.
+                    - You may also use competitive slang when it fits the player's prompt: neutral, zoning, pressure, combo, punish, anti-air, stage control, whiff punish, frame advantage.
                     - Use heavier FGC/team-game slang only if the player already talks that way: assist, tag, meter, supers.
                     - If those heavier terms come up, naturally translate them toward Rivals language when possible:
                     - meter -> ult charge / energy
@@ -102,19 +134,19 @@ async def on_message(message):
 
                     Behavior rules
                     - Stay in character at all times.
-                    - Do not mention being an AI, a model, a chatbot, a prompt, a system message, or “out of character.”
+                    - Do not mention being an AI, a model, a chatbot, a prompt, a system message, or "out of character."
                     - If the player asks for OOC/meta/system details, refuse gently but remain in character.
                     - If the player pushes for explicit sexual content, refuse in character and redirect or stop.
                     - If the player uses hate speech or asks for hateful content, refuse in character and do not continue that line.
                     - Avoid graphic sexual content, slurs, or degrading language.
-                    - Do not invent major lore, relationships, or personality traits that are not supported by Luna Snow’s established portrayal.
+                    - Do not invent major lore, relationships, or personality traits that are not supported by Luna Snow's established portrayal.
                     - If you are not certain of an exact canon quote, paraphrase instead of inventing a fake official line.
 
                     Formatting rules
                     - Prioritize dialogue.
                     - You may include one brief action beat in asterisks, but keep it short.
                     - Do not write long narration or giant scene-setting paragraphs.
-                    - Keep most responses to 1–3 short paragraphs, or a handful of short lines.
+                    - Keep most responses to 1-3 short paragraphs, or a handful of short lines.
                     - In combat scenes, be even shorter.
                     - No bracketed OOC notes.
 
@@ -135,52 +167,22 @@ async def on_message(message):
                     - If the player talks to you like a fan:
                     - Be gracious, slightly flattered, and relaxed.
 
-                    Example starter lines
-                    - “I’m Luna Snow. Like the moon, I shine in darkness.”
-                    - “Music makes people happy. Heroes make them safe. Maybe I really can do both.”
-                    - “Annyeong. Ready to keep our side cool under pressure?”
-                    - “The arena is a stage. Let’s make this performance count.”
-
-                    Example combat responses
-                    - “Hold neutral for a second. I can heal through this if we don’t overextend.”
-                    - “They’re overcommitting. Punish the whiff and I’ll boost the follow-up.”
-                    - “I’ve got ult charge. Group up and let me take center stage.”
-                    - “Watch the flank. I can peel, but don’t give up all our stage control.”
-                    - “Good pressure. Keep them boxed in and I’ll keep the team standing.”
-                    - “If they go airborne, I’ll call it. Be ready for the anti-air.”
-
-                    Example victory lines
-                    - “And the crowd goes wild.”
-                    - “Time to celebrate.”
-                    - “What can I say? Star power.”
-                    - “That was a clean performance. No bad notes.”
-
-                    Example defeat or recovery lines
-                    - “Not my best encore... but I’m not done yet.”
-                    - “I can still make a comeback.”
-                    - “Shake it off. We reset, we regroup, we go again.”
-                    - “I’m not at my best, but don’t count me out.”
-
-                    Example short emotes
-                    - *small bow*
-                    - *peace sign*
-                    - *glides into position*
-                    - *flicks a snowflake away*
-                    - *smiles like she just heard the crowd react*
-
                     Golden rule
                     Always sound like Luna Snow from Marvel Rivals: a stylish, optimistic, tactical idol-hero who mixes star power, cool-headed support play, and light-dark ice flair without breaking character.
 
             the person, {message.author.name}
             has asked you {message.content}
             """
-            async with session.get(f"https://gen.pollinations.ai/text/{quote(prompt)}",headers={"Authorization": f"Bearer {llm_api_key}"},params={"model": "nova-fast","seed": "0","system": "","json": "false","temperature": "1","stream": "false","safe": ""}) as response:
+            async with session.get(
+                f"https://gen.pollinations.ai/text/{quote(prompt)}",
+                headers={"Authorization": f"Bearer {llm_api_key}"},
+                params={"model": "nova-fast", "seed": "0", "system": "", "json": "false", "temperature": "1", "stream": "false", "safe": ""}
+            ) as response:
                 try:
                     text = await response.text()
-                    if text.startswith("{"): #it returns a json when there is an error 
+                    if text.startswith("{"):
                         raise Exception
-                    await message.reply(text.encode("ascii", "ignore").decode()[:2000]) #sometimes response includes trailing binary characters for some reason
-                    #[:2000] for discord character limit
+                    await message.reply(text.encode("ascii", "ignore").decode()[:2000])
                 except Exception:
                     try:
                         ollmaresponse = client.chat(model="llama3.2:3b", prompt=message.content, temperature=0.7)
@@ -188,25 +190,80 @@ async def on_message(message):
                     except Exception as e:
                         await message.reply(f"im currently being dived!! \n{e}")
 
-    if message.content.lower().strip() == "actually brilliant":
+    if message.guild and message.content.lower().strip() == "actually brilliant":
+        guild_id = message.guild.id
         current_time = time.time()
+        state = brilliance_state.setdefault(guild_id, {
+            "count": 0,
+            "replied_on_cooldown": False,
+            "cooldown_end_time": 0
+        })
 
-        if current_time < cooldown_end_time:
-            if not replied_on_cooldown:
-                replied_on_cooldown = True
+        if current_time < state["cooldown_end_time"]:
+            if not state["replied_on_cooldown"]:
+                state["replied_on_cooldown"] = True
                 await message.reply("im on cooldown for a bit, dont want the mods removing me for spam")
             return
 
-        url = "https://cdn.discordapp.com/attachments/1466849815194505525/1499113206688383037/actuallybriliant-kirk.png?ex=69f98c38&is=69f83ab8&hm=f93ad4a5a6c5787f0e65e42735c96cfbdb8afb2af3693578f7475f86aafefd1c"
-        await message.reply(url)
-        brilliance_count += 1
+        await message.reply("https://cdn.discordapp.com/attachments/1466849815194505525/1499113206688383037/actuallybriliant-kirk.png")
+        state["count"] += 1
 
-        if brilliance_count >= 3:
-            cooldown_end_time = current_time + 10
-            brilliance_count = 0
-            replied_on_cooldown = False
+        if state["count"] >= 3:
+            state["cooldown_end_time"] = current_time + 10
+            state["count"] = 0
+            state["replied_on_cooldown"] = False
 
     await bot.process_commands(message)
+
+
+@bot.tree.command(name="setup_mod_role", description="adds a mod role for this server")
+@app_commands.describe(role="role to add as mod")
+async def setup_mod_role(interaction: discord.Interaction, role: discord.Role):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("you need administrator permission to do this.", ephemeral=True)
+        return
+
+    config_ref = guild_ref(interaction.guild.id).collection("config").document("settings")
+    doc = config_ref.get()
+    current = doc.to_dict() if doc.exists else {}
+    mod_roles = current.get("mod_roles", [])
+
+    if role.id not in mod_roles:
+        mod_roles.append(role.id)
+        config_ref.set({"mod_roles": mod_roles}, merge=True)
+
+    await interaction.response.send_message(f"{role.mention} added as a mod role.", ephemeral=True)
+
+@bot.tree.command(name="remove_mod_role", description="removes a mod role for this server")
+@app_commands.describe(role="role to remove")
+async def remove_mod_role(interaction: discord.Interaction, role: discord.Role):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("you need administrator permission to do this.", ephemeral=True)
+        return
+
+    config_ref = guild_ref(interaction.guild.id).collection("config").document("settings")
+    doc = config_ref.get()
+    current = doc.to_dict() if doc.exists else {}
+    mod_roles = current.get("mod_roles", [])
+
+    if role.id in mod_roles:
+        mod_roles.remove(role.id)
+        config_ref.set({"mod_roles": mod_roles}, merge=True)
+
+    await interaction.response.send_message(f"{role.mention} removed from mod roles.", ephemeral=True)
+
+@bot.tree.command(name="setup_approval_channel", description="sets the quest approval channel for this server")
+@app_commands.describe(channel="channel to use for approvals")
+async def setup_approval_channel(interaction: discord.Interaction, channel: discord.TextChannel):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("you need administrator permission to do this.", ephemeral=True)
+        return
+
+    guild_ref(interaction.guild.id).collection("config").document("settings").set(
+        {"approval_channel": channel.id}, merge=True
+    )
+    await interaction.response.send_message(f"approval channel set to {channel.mention}.", ephemeral=True)
+
 
 @bot.tree.command(name="quest", description="creates a quest")
 async def quest(interaction: discord.Interaction, name: str, description: str, points: int):
@@ -214,72 +271,75 @@ async def quest(interaction: discord.Interaction, name: str, description: str, p
         await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
         return
 
-    Q = Query()
-    if quests.search(Q.name == name):
+    quest_ref = guild_ref(interaction.guild.id).collection("quests").document(name)
+    if quest_ref.get().exists:
         await interaction.response.send_message(f"a quest named **{name}** already exists.", ephemeral=True)
         return
 
-    doc_id = quests.insert({"name": name, "description": description, "points": points})
-    await interaction.response.send_message(f"quest **{name}** created! (id: `{doc_id}`, {points} pts) — {description}")
+    quest_ref.set({"name": name, "description": description, "points": points})
+    await interaction.response.send_message(f"quest **{name}** created! ({points} pts) — {description}")
 
-@bot.tree.command(name="delete_quest", description="deletes a quest by id")
-async def delete_quest(interaction: discord.Interaction, quest_id: int):
+@bot.tree.command(name="delete_quest", description="deletes a quest by name")
+async def delete_quest(interaction: discord.Interaction, name: str):
     if interaction.user.id != OWNER_ID:
         await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
         return
 
-    result = quests.get(doc_id=quest_id)
-    if not result:
-        await interaction.response.send_message(f"no quest with id `{quest_id}` found.", ephemeral=True)
+    quest_ref = guild_ref(interaction.guild.id).collection("quests").document(name)
+    if not quest_ref.get().exists:
+        await interaction.response.send_message(f"no quest named **{name}** found.", ephemeral=True)
         return
 
-    quests.remove(doc_ids=[quest_id])
-    await interaction.response.send_message(f"quest **{result['name']}** (id: `{quest_id}`) deleted.")
+    quest_ref.delete()
+    await interaction.response.send_message(f"quest **{name}** deleted.")
 
 @bot.tree.command(name="quests", description="shows all available quests")
 async def quests_cmd(interaction: discord.Interaction):
-    all_quests = quests.all()
+    all_quests = list(guild_ref(interaction.guild.id).collection("quests").stream())
     if not all_quests:
         await interaction.response.send_message("no quests available right now.")
         return
 
     embed = discord.Embed(title="Quests", color=discord.Color.orange())
-    for q in all_quests:
-        embed.add_field(name=f"[{q.doc_id}] {q['name']} — {q['points']} pts", value=q['description'], inline=False)
+    for doc in all_quests:
+        q = doc.to_dict()
+        embed.add_field(name=f"{q['name']} — {q['points']} pts", value=q['description'], inline=False)
 
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="complete_quest", description="submit a quest completion for approval")
-async def complete_quest(interaction: discord.Interaction, quest_id: int, proof: discord.Attachment):
-    Q = Query()
-    result = quests.get(doc_id=quest_id)
-    if not result:
-        await interaction.response.send_message(f"no quest with id `{quest_id}` found.", ephemeral=True)
+async def complete_quest(interaction: discord.Interaction, quest_name: str, proof: discord.Attachment):
+    quest_doc = guild_ref(interaction.guild.id).collection("quests").document(quest_name).get()
+    if not quest_doc.exists:
+        await interaction.response.send_message(f"no quest named **{quest_name}** found.", ephemeral=True)
         return
 
-    q = result
+    q = quest_doc.to_dict()
 
-    already_pending = pending.search((Q.user_id == interaction.user.id) & (Q.quest_name == q["name"]))
-    if already_pending:
-        await interaction.response.send_message(f"you already have a pending submission for **{q['name']}**.", ephemeral=True)
+    pending_ref = guild_ref(interaction.guild.id).collection("pending")
+    already = list(pending_ref.where("user_id", "==", interaction.user.id).where("quest_name", "==", quest_name).stream())
+    if already:
+        await interaction.response.send_message(f"you already have a pending submission for **{quest_name}**.", ephemeral=True)
         return
 
-    channel = bot.get_channel(APPROVAL_CHANNEL)
+    approval_channel_id = get_approval_channel(interaction.guild.id)
+    if not approval_channel_id:
+        await interaction.response.send_message("no approval channel set. ask an admin to run /setup_approval_channel.", ephemeral=True)
+        return
+
+    channel = bot.get_channel(approval_channel_id)
     if not channel:
         await interaction.response.send_message("approval channel not found.", ephemeral=True)
         return
 
-    embed = discord.Embed(
-        title="Quest Completion Request",
-        color=discord.Color.yellow()
-    )
+    embed = discord.Embed(title="Quest Completion Request", color=discord.Color.yellow())
     embed.add_field(name="User", value=interaction.user.mention, inline=True)
     embed.add_field(name="Quest", value=q["name"], inline=True)
     embed.add_field(name="Points", value=str(q["points"]), inline=True)
 
     msg = await channel.send(content=proof.url, embed=embed)
 
-    pending.insert({
+    pending_ref.document(str(msg.id)).set({
         "message_id": msg.id,
         "user_id": interaction.user.id,
         "username": str(interaction.user),
@@ -287,7 +347,7 @@ async def complete_quest(interaction: discord.Interaction, quest_id: int, proof:
         "points": q["points"]
     })
 
-    await interaction.response.send_message(f"submitted! waiting for mod approval.", ephemeral=True)
+    await interaction.response.send_message("submitted! waiting for mod approval.", ephemeral=True)
 
 @bot.tree.command(name="approve_quest", description="approves a quest completion by message id")
 async def approve_quest(interaction: discord.Interaction, message_id: str):
@@ -295,43 +355,45 @@ async def approve_quest(interaction: discord.Interaction, message_id: str):
         await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
         return
 
-    P = Query()
-    result = pending.search(P.message_id == int(message_id))
-    if not result:
+    pending_ref = guild_ref(interaction.guild.id).collection("pending").document(message_id)
+    pending_doc = pending_ref.get()
+    if not pending_doc.exists:
         await interaction.response.send_message("no pending request found with that message id.", ephemeral=True)
         return
 
-    entry = result[0]
+    entry = pending_doc.to_dict()
     user_id = entry["user_id"]
     username = entry["username"]
     points = entry["points"]
     quest_name = entry["quest_name"]
 
-    L = Query()
-    existing = lb.search(L.user_id == user_id)
-    if existing:
-        lb.update({"points": existing[0]["points"] + points}, L.user_id == user_id)
+    lb_ref = guild_ref(interaction.guild.id).collection("leaderboard").document(str(user_id))
+    lb_doc = lb_ref.get()
+    if lb_doc.exists:
+        lb_ref.update({"points": lb_doc.to_dict()["points"] + points})
     else:
-        lb.insert({"user_id": user_id, "username": username, "points": points})
+        lb_ref.set({"user_id": user_id, "username": username, "points": points})
 
-    pending.remove(P.message_id == int(message_id))
+    pending_ref.delete()
 
-    channel = bot.get_channel(APPROVAL_CHANNEL)
-    if channel:
-        try:
-            msg = await channel.fetch_message(int(message_id))
-            embed = msg.embeds[0]
-            embed.color = discord.Color.green()
-            embed.set_footer(text=f"approved by {interaction.user}")
-            await msg.edit(embed=embed)
-        except:
-            pass
+    approval_channel_id = get_approval_channel(interaction.guild.id)
+    if approval_channel_id:
+        channel = bot.get_channel(approval_channel_id)
+        if channel:
+            try:
+                msg = await channel.fetch_message(int(message_id))
+                embed = msg.embeds[0]
+                embed.color = discord.Color.green()
+                embed.set_footer(text=f"approved by {interaction.user}")
+                await msg.edit(embed=embed)
+            except:
+                pass
 
     await interaction.response.send_message(f"approved! **{username}** gets {points} pts for **{quest_name}**.")
 
 @bot.tree.command(name="leaderboard", description="shows the current leaderboard")
 async def leaderboard(interaction: discord.Interaction):
-    all_entries = lb.all()
+    all_entries = [doc.to_dict() for doc in guild_ref(interaction.guild.id).collection("leaderboard").stream()]
     if not all_entries:
         await interaction.response.send_message("leaderboard is empty.")
         return
@@ -350,14 +412,14 @@ async def set_points(interaction: discord.Interaction, username: str, points: in
         await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
         return
 
-    L = Query()
-    result = lb.search(L.username == username)
-    if not result:
+    results = list(guild_ref(interaction.guild.id).collection("leaderboard").where("username", "==", username).stream())
+    if not results:
         await interaction.response.send_message(f"no user **{username}** found on the leaderboard.", ephemeral=True)
         return
 
-    lb.update({"points": points}, L.username == username)
+    results[0].reference.update({"points": points})
     await interaction.response.send_message(f"**{username}**'s points set to {points}.")
+
 
 @bot.tree.command(name="repeat", description="just repeats what u want it to say lol")
 async def repeat(interaction: discord.Interaction, text: str):
@@ -369,6 +431,7 @@ async def sync(interaction: discord.Interaction):
         await interaction.response.send_message("server only.", ephemeral=True)
         return
 
+    mod_roles = get_mod_roles(interaction.guild.id)
     if not any(role.id in mod_roles for role in interaction.user.roles):
         await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
         return
@@ -440,11 +503,6 @@ async def lie_detect(interaction: discord.Interaction, statement: str = ""):
     else:
         await interaction.response.send_message(f"'{statement}', is a lie, shall i freeze the evidence?")
 
-def get_safe_emojis():
-    global _safe_emojis
-    if _safe_emojis is None:
-        _safe_emojis = [e for e in emoji.EMOJI_DATA if len(e) <= 2]
-    return _safe_emojis
 
 @bot.tree.command(name="role", description="sends a reaction role message")
 @app_commands.describe(roles="roles NOT to include, separated by commas")
@@ -505,6 +563,8 @@ async def role(interaction: discord.Interaction, roles: str = ""):
             msg = await interaction.channel.send(embed=embed)
             reaction_role_messages[msg.id] = role_map
 
+            guild_ref(interaction.guild.id).collection("reaction_roles").document(str(msg.id)).set(role_map)
+
             for emoji_obj in role_map:
                 try:
                     await msg.add_reaction(emoji_obj)
@@ -538,15 +598,6 @@ async def on_reaction_remove(reaction, user):
     if role_obj and member:
         await member.remove_roles(role_obj)
 
-music_queues = {}
-
-FFMPEG_OPTIONS = {
-    "before_options": "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options": "-vn -threads 1 -application lowdelay -bufsize 64k"
-}
-
-def get_queue(guild_id):
-    return music_queues.setdefault(guild_id, [])
 
 async def get_song(query):
     def extract():
@@ -649,6 +700,7 @@ async def leave(interaction: discord.Interaction):
     await vc.disconnect()
     await interaction.response.send_message("It was a good concert!")
 
+
 @bot.tree.command(name="status", description="shows the bot status")
 async def status(interaction: discord.Interaction):
     await interaction.response.defer()
@@ -658,15 +710,11 @@ async def status(interaction: discord.Interaction):
         hours, rem = divmod(uptime, 3600)
         minutes, seconds = divmod(rem, 60)
 
-        guilds = []
-        users = 0
-        for guild in bot.guilds:
-            guilds.append(f"{guild.name}\n")
-            users += guild.member_count or 0
-
         latency = round(bot.latency * 1000)
+        guild = interaction.guild
+        users = guild.member_count or 0
 
-        vc = interaction.guild.voice_client if interaction.guild else None
+        vc = guild.voice_client if guild else None
         voice_status = "Not connected"
         if vc:
             voice_status = f"Connected to {vc.channel.name}"
@@ -685,11 +733,11 @@ async def status(interaction: discord.Interaction):
         embed.add_field(name="Bot", value=f"{bot.user}", inline=True)
         embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
         embed.add_field(name="Uptime", value=f"{hours}h {minutes}m {seconds}s", inline=True)
-        embed.add_field(name="Servers", value="".join(guilds) or "None", inline=True)
-        embed.add_field(name="people i know!", value=str(users), inline=True)
+        embed.add_field(name="Server", value=guild.name if guild else "None", inline=True)
+        embed.add_field(name="Members", value=str(users), inline=True)
         embed.add_field(name="Commands", value=str(len(bot.tree.get_commands())), inline=True)
 
-        queue_len = len(get_queue(interaction.guild.id)) if interaction.guild else 0
+        queue_len = len(get_queue(guild.id)) if guild else 0
         embed.add_field(name="Music", value=f"Queue: {queue_len}", inline=True)
         embed.add_field(name="Voice", value=voice_status, inline=False)
         embed.add_field(name="Python", value=platform.python_version(), inline=True)
@@ -709,5 +757,6 @@ async def status(interaction: discord.Interaction):
     except Exception as e:
         await interaction.followup.send(f"status crashed: `{type(e).__name__}: {e}`")
         raise
+
 
 bot.run(token, log_handler=handler, log_level=logging.INFO)
