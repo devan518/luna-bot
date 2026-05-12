@@ -33,8 +33,7 @@
 <div align="center">
 
 > **Note:** Some features/databases are currently tailored for the original server, such as leaderboards, quests, and mod roles. This will be fixed in a patch update.
-
-<br>
+---
 > **Update:** Rewrote database in firebase, will update new global features tommorrow
 
 </div>
