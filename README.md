@@ -74,7 +74,7 @@ Then give LunaBot a role with appropriate permissions — ideally your default m
 
 | Command | Description |
 |---|---|
-| `/emote` | Luna breaks it down — pick from her Marvel Rivals emotes |
+| `/emote` | luna break it down for us rq (select an emote to send from her in game emotes) |
 | `/lie-detect` | Luna determines whether your statement is true or not |
 | `/repeat` | Luna repeats whatever you tell her to say |
 
