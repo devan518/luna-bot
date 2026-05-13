@@ -30,7 +30,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
 intents.members = True
-
+intents.reactions = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 client = OllamaFreeAPI()
 
@@ -55,13 +55,6 @@ def get_queue(guild_id):
 @bot.event
 async def on_ready():
     print(f"{bot.user} has connected to Discord!")
-
-    for guild in bot.guilds:
-        rr_docs = db.collection("guilds").document(str(guild.id)).collection("reaction_roles").stream()
-        for doc in rr_docs:
-            reaction_role_messages[int(doc.id)] = doc.to_dict()
-
-    print("Loaded reaction roles from Firestore.")
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error):
@@ -306,6 +299,7 @@ async def role(interaction: discord.Interaction, roles: str = ""):
     if len(allowed_roles) > len(emojis):
         await interaction.response.send_message("not enough emojis", ephemeral=True)
         return
+
     CHUNK_SIZE = 20
     role_emoji_pairs = list(zip(allowed_roles, emojis))
     chunks = [role_emoji_pairs[i:i + CHUNK_SIZE] for i in range(0, len(role_emoji_pairs), CHUNK_SIZE)]
@@ -332,13 +326,12 @@ async def role(interaction: discord.Interaction, roles: str = ""):
             msg = await interaction.channel.send(embed=embed)
             reaction_role_messages[msg.id] = role_map
 
-            db.collection("guilds").document(str(interaction.guild.id)).collection("reaction_roles").document(str(msg.id)).set(role_map)
-
             for emoji_obj in role_map:
                 try:
                     await msg.add_reaction(emoji_obj)
                 except:
                     pass
+
         except discord.Forbidden:
             await interaction.followup.send("I don't have permission to send messages here.", ephemeral=True)
             break
