@@ -130,7 +130,7 @@ Then give LunaBot a role with appropriate permissions — ideally your default m
 - [x] Quest & points system with mod approval flow
 - [x] Reaction roles
 - [x] Leaderboard
-- [ ] Improve responses from luna to be mroe themed, looking for contributors to open issues of ideas
+- [ ] Improve responses from luna to be more themed, looking for contributors for ideas
 - [ ] More Luna-themed responses and interactions
 
 See [open issues](https://github.com/devan518/luna-bot/issues) for a full list of proposed features and known bugs.
