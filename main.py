@@ -57,6 +57,10 @@ def get_queue(guild_id):
 async def on_ready():
     print(f"{bot.user} has connected to Discord!")
 
+@bot.event
+async def on_presence_update(before, after):
+    print("PRESENCE:", after.name, after.status, after.activities)
+
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.MissingAnyRole):
@@ -551,7 +555,7 @@ async def status(interaction: discord.Interaction):
         embed.add_field(name="Python", value=platform.python_version(), inline=True)
         embed.add_field(name="discord.py", value=discord.__version__, inline=True)
         embed.add_field(name="OS", value=platform.system(), inline=True)
-        embed.add_field(name="Intents",value=(f"Message Content: {bot.intents.message_content}\n"f"Members: {bot.intents.members}\n"f"Voice States: {bot.intents.voice_states}"),inline=False)
+        embed.add_field(name="Intents",value=(f"Message Content: {bot.intents.message_content}\n"f"Members: {bot.intents.members}\n"f"Voice States: {bot.intents.voice_states}"f"Presence Updates{bot.intents.presences}"),inline=False)
 
         await interaction.followup.send(embed=embed)
     except Exception as e:
