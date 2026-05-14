@@ -31,6 +31,7 @@ intents.message_content = True
 intents.voice_states = True
 intents.members = True
 intents.reactions = True
+intents.presences = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 client = OllamaFreeAPI()
 
@@ -92,7 +93,8 @@ async def check_activity(interaction: discord.Interaction, member: discord.Membe
     if not member.activities:
         await interaction.response.send_message(f"{member.display_name} is not doing anything right now, maybe they should que some ranked on dps luna 🤑❄️🥶")
         return
-
+    member = await interaction.guild.fetch_member(member.id)
+    #discord local cache of this data might be outdated
     embed = discord.Embed(
         title=f"{member.display_name}'s Activities",
         color=discord.Color.blue()
