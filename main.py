@@ -57,10 +57,6 @@ def get_queue(guild_id):
 async def on_ready():
     print(f"{bot.user} has connected to Discord!")
 
-@bot.event
-async def on_presence_update(before, after):
-    print("PRESENCE:", after.name, after.status, after.activities)
-
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.MissingAnyRole):
@@ -94,11 +90,15 @@ async def on_message(message):
 
 @bot.tree.command(name="check_activity", description="shows all activities of a user at the time this command is used")
 async def check_activity(interaction: discord.Interaction, member: discord.Member):
+    member = await interaction.guild.fetch_member(member.id)
+    #discord local cache of this data might be outdated, fetch via api
+    print(member.activities)
+    for activity in member.activities:
+        print(type(activity), vars(activity))
+
     if not member.activities:
         await interaction.response.send_message(f"{member.display_name} is not doing anything right now, maybe they should que some ranked on dps luna 🤑❄️🥶")
-        return
-    member = await interaction.guild.fetch_member(member.id)
-    #discord local cache of this data might be outdated
+        return    
     embed = discord.Embed(
         title=f"{member.display_name}'s Activities",
         color=discord.Color.blue()
@@ -130,6 +130,12 @@ async def check_activity(interaction: discord.Interaction, member: discord.Membe
             embed.add_field(
                 name="Custom Status",
                 value=activity.name or "No status text",
+                inline=False
+            )
+        elif isinstance(activity, discord.Activity):
+            embed.add_field(
+                name="Misc", 
+                value=activity.name,
                 inline=False
             )
 
@@ -546,7 +552,13 @@ async def status(interaction: discord.Interaction):
         embed.add_field(name="Bot", value=f"{bot.user}", inline=True)
         embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
         embed.add_field(name="Uptime", value=f"{hours}h {minutes}m {seconds}s", inline=True)
-        embed.add_field(name="Server", value=guild.name if guild else "None", inline=True)
+        servers = "\n".join(f"{g.name} (`{g.id}`)" for g in bot.guilds)
+
+        embed.add_field(
+            name=f"Servers ({len(bot.guilds)})",
+            value=servers[:1024] if servers else "None",
+            inline=False
+        )
         embed.add_field(name="Members", value=str(users), inline=True)
         embed.add_field(name="Commands", value=str(len(bot.tree.get_commands())), inline=True)
         queue_len = len(get_queue(guild.id)) if guild else 0
