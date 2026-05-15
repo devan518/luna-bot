@@ -96,10 +96,10 @@ async def check_activity(interaction: discord.Interaction, member: discord.Membe
     for activity in member.activities:
         print(type(activity), vars(activity))
 
-#    if not member.activities:
-#        await interaction.response.send_message(
-#            f"{member.display_name} is not doing anything right now, maybe they should que some ranked on dps luna 🤑❄️🥶"
-#        )
+    if not member.activities:
+        await interaction.response.send_message(
+            f"{member.display_name} is not doing anything right now, maybe they should que some ranked on dps luna 🤑❄️🥶"
+        )
         return
 
     embed = discord.Embed(
@@ -145,6 +145,7 @@ async def check_activity(interaction: discord.Interaction, member: discord.Membe
                 parts.append(f"**Details:** {activity.details}")
             if activity.state:
                 parts.append(f"**State:** {activity.state}")
+
 
             embed.add_field(
                 name=activity.type.name.title(),
