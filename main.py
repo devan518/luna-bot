@@ -90,15 +90,18 @@ async def on_message(message):
 
 @bot.tree.command(name="check_activity", description="shows all activities of a user at the time this command is used")
 async def check_activity(interaction: discord.Interaction, member: discord.Member):
-    member = await interaction.guild.fetch_member(member.id)
-    #discord local cache of this data might be outdated, fetch via api
+    member = interaction.guild.get_member(member.id) or member
+
     print(member.activities)
     for activity in member.activities:
         print(type(activity), vars(activity))
 
-    if not member.activities:
-        await interaction.response.send_message(f"{member.display_name} is not doing anything right now, maybe they should que some ranked on dps luna 🤑❄️🥶")
-        return    
+#    if not member.activities:
+#        await interaction.response.send_message(
+#            f"{member.display_name} is not doing anything right now, maybe they should que some ranked on dps luna 🤑❄️🥶"
+#        )
+        return
+
     embed = discord.Embed(
         title=f"{member.display_name}'s Activities",
         color=discord.Color.blue()
@@ -129,20 +132,30 @@ async def check_activity(interaction: discord.Interaction, member: discord.Membe
         elif isinstance(activity, discord.CustomActivity):
             embed.add_field(
                 name="Custom Status",
-                value=activity.name or "No status text",
+                value=activity.name or activity.state or "No status text",
                 inline=False
             )
+
         elif isinstance(activity, discord.Activity):
+            parts = []
+
+            if activity.name:
+                parts.append(f"**App:** {activity.name}")
+            if activity.details:
+                parts.append(f"**Details:** {activity.details}")
+            if activity.state:
+                parts.append(f"**State:** {activity.state}")
+
             embed.add_field(
-                name="Misc", 
-                value=activity.name,
+                name=activity.type.name.title(),
+                value="\n".join(parts) or "Unknown activity",
                 inline=False
             )
 
         else:
             embed.add_field(
-                name=activity.type.name.title(),
-                value=getattr(activity, "name", "Unknown activity"),
+                name=getattr(activity.type, "name", "Activity").title(),
+                value=getattr(activity, "name", None) or "Unknown activity",
                 inline=False
             )
 
