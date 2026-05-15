@@ -90,77 +90,60 @@ async def on_message(message):
 
 @bot.tree.command(name="check_activity", description="shows all activities of a user at the time this command is used")
 async def check_activity(interaction: discord.Interaction, member: discord.Member):
-    member = interaction.guild.get_member(member.id) or member
+    await interaction.response.defer()
 
-    print(member.activities)
-    for activity in member.activities:
-        print(type(activity), vars(activity))
+    try:
+        member = interaction.guild.get_member(member.id) or member
 
-    if not member.activities:
-        await interaction.response.send_message(
-            f"{member.display_name} is not doing anything right now, maybe they should que some ranked on dps luna 🤑❄️🥶"
+        print(member.activities)
+        for activity in member.activities:
+            print(type(activity), repr(activity))
+
+        if not member.activities:
+            await interaction.followup.send(
+                f"{member.display_name} is not doing anything right now, maybe they should que some ranked on dps luna 🤑❄️🥶"
+            )
+            return
+
+        embed = discord.Embed(
+            title=f"{member.display_name}'s Activities",
+            color=discord.Color.blue()
         )
-        return
 
-    embed = discord.Embed(
-        title=f"{member.display_name}'s Activities",
-        color=discord.Color.blue()
-    )
+        for activity in member.activities:
+            if isinstance(activity, discord.Spotify):
+                value = f"**{activity.title}** by **{activity.artist}**"
 
-    for activity in member.activities:
-        if isinstance(activity, discord.Game):
-            embed.add_field(
-                name="Playing",
-                value=activity.name,
-                inline=False
-            )
+            elif isinstance(activity, discord.Streaming):
+                value = f"[{activity.name}]({activity.url})"
 
-        elif isinstance(activity, discord.Streaming):
-            embed.add_field(
-                name="Streaming",
-                value=f"[{activity.name}]({activity.url})",
-                inline=False
-            )
+            elif isinstance(activity, discord.CustomActivity):
+                value = activity.name or activity.state or "No status text"
 
-        elif isinstance(activity, discord.Spotify):
-            embed.add_field(
-                name="Listening on Spotify",
-                value=f"**{activity.title}** by **{activity.artist}**",
-                inline=False
-            )
+            elif isinstance(activity, discord.Activity):
+                parts = []
+                if activity.name:
+                    parts.append(f"**App:** {activity.name}")
+                if activity.details:
+                    parts.append(f"**Details:** {activity.details}")
+                if activity.state:
+                    parts.append(f"**State:** {activity.state}")
+                value = "\n".join(parts) or "Unknown activity"
 
-        elif isinstance(activity, discord.CustomActivity):
-            embed.add_field(
-                name="Custom Status",
-                value=activity.name or activity.state or "No status text",
-                inline=False
-            )
+            else:
+                value = getattr(activity, "name", None) or "Unknown activity"
 
-        elif isinstance(activity, discord.Activity):
-            parts = []
-
-            if activity.name:
-                parts.append(f"**App:** {activity.name}")
-            if activity.details:
-                parts.append(f"**Details:** {activity.details}")
-            if activity.state:
-                parts.append(f"**State:** {activity.state}")
-
-
-            embed.add_field(
-                name=activity.type.name.title(),
-                value="\n".join(parts) or "Unknown activity",
-                inline=False
-            )
-
-        else:
             embed.add_field(
                 name=getattr(activity.type, "name", "Activity").title(),
-                value=getattr(activity, "name", None) or "Unknown activity",
+                value=value,
                 inline=False
             )
 
-    await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        print("check_activity crashed:", repr(e))
+        await interaction.followup.send(f"check_activity crashed: `{type(e).__name__}: {e}`")
 
 @app_commands.checks.has_any_role("questmaster")
 @bot.tree.command(name="quest", description="creates a quest")
