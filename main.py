@@ -38,6 +38,7 @@ client = OllamaFreeAPI()
 reaction_role_messages = {}
 music_queues = {}
 _safe_emojis = [e for e in emoji.EMOJI_DATA if len(e) <= 2]
+brilliance_cooldowns = {}
 
 FFMPEG_OPTIONS = {
     "before_options": "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
@@ -85,6 +86,35 @@ async def on_message(message):
                         await message.reply(ollmaresponse[:2000])
                     except Exception as e:
                         await message.reply(f"im currently being dived!! \n{e}")
+
+    if message.content.lower().strip() == "actually brilliant":
+        if message.guild is None:
+            return
+
+        guild_id = message.guild.id
+        current_time = time.time()
+
+        data = brilliance_cooldowns.setdefault(guild_id, {
+            "count": 0,
+            "replied_on_cooldown": False,
+            "cooldown_end_time": 0
+        })
+
+        if current_time < data["cooldown_end_time"]:
+            if not data["replied_on_cooldown"]:
+                data["replied_on_cooldown"] = True
+                await message.reply("im on cooldown for a bit, dont want the mods removing me for spam")
+            return
+
+        url = "https://cdn.discordapp.com/attachments/1466849815194505525/1499113206688383037/actuallybriliant-kirk.png?ex=69f98c38&is=69f83ab8&hm=f93ad4a5a6c5787f0e65e42735c96cfbdb8afb2af3693578f7475f86aafefd1c"
+        await message.reply(url)
+
+        data["count"] += 1
+
+        if data["count"] >= 3:
+            data["cooldown_end_time"] = current_time + 10
+            data["count"] = 0
+            data["replied_on_cooldown"] = False
 
     await bot.process_commands(message)
 
