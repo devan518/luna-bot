@@ -73,7 +73,7 @@ async def on_message(message):
 
     if "{67?cghcmj}" in message.content.lower().strip():
         channel = bot.get_channel(message.channel.id)
-        await channel.send(f"{message.author.name}-san sent '{imsosorry.uwuify(message.content)}'".replace("{67?cghcmj}", ""))
+        await channel.send(f"{message.author.name}-san sent '{imsosorry.uwuify(message.content.replace("{67?cghcmj}", ""))}'")
         await message.delete()
     if isinstance(message.channel, discord.DMChannel):
         async with aiohttp.ClientSession() as session:
