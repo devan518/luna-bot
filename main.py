@@ -14,6 +14,7 @@ from urllib.parse import quote
 from ollamafreeapi import OllamaFreeAPI
 import firebase_admin
 from firebase_admin import credentials, firestore
+import imsosorry
 
 cred = credentials.Certificate("luna-bot-487b8-firebase-adminsdk-fbsvc-863e32516e.json")
 firebase_admin.initialize_app(cred)
@@ -29,7 +30,6 @@ handler = logging.FileHandler(filename="discord.log", encoding="utf-8", mode="w"
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
-intents.members = True
 intents.reactions = True
 intents.presences = True
 bot = commands.Bot(command_prefix="/", intents=intents)
@@ -70,6 +70,11 @@ async def on_app_command_error(interaction: discord.Interaction, error):
 async def on_message(message):
     if message.author.bot:
         return
+
+    if "{67?cghcmj}" in message.content.lower().strip():
+        channel = bot.get_channel(message.channel.id)
+        await message.delete()
+        await channel.send(f"{message.author.name} sent {imsosorry.uwuify(message.content)}")
 
     if isinstance(message.channel, discord.DMChannel):
         async with aiohttp.ClientSession() as session:
@@ -117,63 +122,6 @@ async def on_message(message):
             data["replied_on_cooldown"] = False
 
     await bot.process_commands(message)
-
-@bot.tree.command(name="check_activity", description="shows all activities of a user at the time this command is used")
-async def check_activity(interaction: discord.Interaction, member: discord.Member):
-    await interaction.response.defer()
-
-    try:
-        member = interaction.guild.get_member(member.id) or member
-
-        print(member.activities)
-        for activity in member.activities:
-            print(type(activity), repr(activity))
-
-        if not member.activities:
-            await interaction.followup.send(
-                f"{member.display_name} is not doing anything right now, maybe they should que some ranked on dps luna 🤑❄️🥶"
-            )
-            return
-
-        embed = discord.Embed(
-            title=f"{member.display_name}'s Activities",
-            color=discord.Color.blue()
-        )
-
-        for activity in member.activities:
-            if isinstance(activity, discord.Spotify):
-                value = f"**{activity.title}** by **{activity.artist}**"
-
-            elif isinstance(activity, discord.Streaming):
-                value = f"[{activity.name}]({activity.url})"
-
-            elif isinstance(activity, discord.CustomActivity):
-                value = activity.name or activity.state or "No status text"
-
-            elif isinstance(activity, discord.Activity):
-                parts = []
-                if activity.name:
-                    parts.append(f"**App:** {activity.name}")
-                if activity.details:
-                    parts.append(f"**Details:** {activity.details}")
-                if activity.state:
-                    parts.append(f"**State:** {activity.state}")
-                value = "\n".join(parts) or "Unknown activity"
-
-            else:
-                value = getattr(activity, "name", None) or "Unknown activity"
-
-            embed.add_field(
-                name=getattr(activity.type, "name", "Activity").title(),
-                value=value,
-                inline=False
-            )
-
-        await interaction.followup.send(embed=embed)
-
-    except Exception as e:
-        print("check_activity crashed:", repr(e))
-        await interaction.followup.send(f"check_activity crashed: `{type(e).__name__}: {e}`")
 
 @app_commands.checks.has_any_role("questmaster")
 @bot.tree.command(name="quest", description="creates a quest")
