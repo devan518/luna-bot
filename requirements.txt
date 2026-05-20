@@ -1,7 +1,8 @@
 discord.py[voice]
 emoji
-pytubefix
 aiohttp
 ollamafreeapi
 firebase-admin
 python-dotenv
+yt-dlp
+PyNaCl

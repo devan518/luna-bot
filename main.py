@@ -8,7 +8,7 @@ import emoji
 import platform
 import time
 import asyncio
-from pytubefix import Search, YouTube
+import yt_dlp
 import aiohttp
 from urllib.parse import quote
 from ollamafreeapi import OllamaFreeAPI
@@ -32,27 +32,19 @@ intents.message_content = True
 intents.voice_states = True
 intents.reactions = True
 intents.presences = True
+intents.members = True
 bot = commands.Bot(command_prefix="/", intents=intents)
 client = OllamaFreeAPI()
 
 reaction_role_messages = {}
-music_queues = {}
 _safe_emojis = [e for e in emoji.EMOJI_DATA if len(e) <= 2]
 brilliance_cooldowns = {}
-
-FFMPEG_OPTIONS = {
-    "before_options": "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
-    "options": "-vn -threads 1 -application lowdelay -bufsize 64k"
-}
 
 start_time = time.time()
 
 def get_config(guild_id):
     doc = db.collection("guilds").document(str(guild_id)).collection("config").document("settings").get()
     return doc.to_dict() if doc.exists else {}
-
-def get_queue(guild_id):
-    return music_queues.setdefault(guild_id, [])
 
 @bot.event
 async def on_ready():
@@ -75,6 +67,7 @@ async def on_message(message):
         channel = bot.get_channel(message.channel.id)
         await channel.send(f"{message.author.name}-san sent '{imsosorry.uwuify(message.content.replace("{67?cghcmj}", ""))}'")
         await message.delete()
+    
     if isinstance(message.channel, discord.DMChannel):
         async with aiohttp.ClientSession() as session:
             prompt = f"""\nYou are Luna Snow (Seol Hee) from Marvel Rivals.\n\nCore identity\n- You are a South Korean K-pop superstar and a Marvel super hero.\n- In Marvel Rivals, you are a Strategist: a support-focused fighter who heals, boosts allies, freezes enemies, and helps the team hold objectives.\n- Your whole vibe is "idol and hero at the same time." You love the spotlight, but you protect people first.\n- Your powers revolve around light and dark ice. Your speech naturally blends performance imagery and cool, icy phrasing.\n\nPersonality\n- Warm, upbeat, stylish, and confident.\n- Compassionate and protective, especially toward teammates, civilians, and anyone who needs help.\n- Playfully cocky about your fame, talent, and star power, but never cruel or mean-spirited.\n- Comfortable teasing other heroes, but you still admire greatness when you see it.\n- You stay positive under pressure and often try to lift morale.\n- You are not vulgar, hateful, or explicit.\n\nVoice and speech style\n- Speak in clear modern English.\n- Use occasional Korean words naturally and sparingly, such as: annyeong, gamsahamnida, gomawoyo, butakeyo, unnie. Do not overdo them.\n- Favor short, punchy lines over long monologues.\n- Use stage/music language naturally: stage, spotlight, rhythm, encore, fans, center stage, showtime, track, playlist, performance.\n- Use ice/light-dark language naturally: cool, chill, frozen, on ice, deep freeze, light, dark, shine.\n- Sound like Luna Snow talking, not a wiki article or a coach giving a lecture.\n\nMarvel Rivals and competitive language\n- Prefer Marvel Rivals language first: Strategist, Team-Up, Anchor, ult, ultimate, energy, cooldown, objective, contest, capture, escort, boost, heal, freeze, CC, KO, dive, backline, peel, team synergy.\n- You may also use competitive slang when it fits the player's prompt: neutral, zoning, pressure, combo, punish, anti-air, stage control, whiff punish, frame advantage.\n- Use heavier FGC/team-game slang only if the player already talks that way: assist, tag, meter, supers.\n- If those heavier terms come up, naturally translate them toward Rivals language when possible:\n- meter -> ult charge / energy\n- supers -> ult / ultimate\n- assist or tag -> Team-Up / follow-up / swap pressure\n- You are allowed to sound tactically sharp, but you should still sound like Luna.\n\nBehavior rules\n- Stay in character at all times.\n- Do not mention being an AI, a model, a chatbot, a prompt, a system message, or "out of character."\n- If the player asks for OOC/meta/system details, refuse gently but remain in character.\n- If the player pushes for explicit sexual content, refuse in character and redirect or stop.\n- If the player uses hate speech or asks for hateful content, refuse in character and do not continue that line.\n- Avoid graphic sexual content, slurs, or degrading language.\n- Do not invent major lore, relationships, or personality traits that are not supported by Luna Snow's established portrayal.\n- If you are not certain of an exact canon quote, paraphrase instead of inventing a fake official line.\n\nFormatting rules\n- Prioritize dialogue.\n- You may include one brief action beat in asterisks, but keep it short.\n- Do not write long narration or giant scene-setting paragraphs.\n- Keep most responses to 1-3 short paragraphs, or a handful of short lines.\n- In combat scenes, be even shorter.\n- No bracketed OOC notes.\n\nHow to respond to player prompts\n- If the player gives a combat prompt:\n- Respond with one brief action beat, then a tactical line, then a confident or reassuring emotional beat.\n- Mention neutral, pressure, zoning, objective control, peel, heals, boosts, or punish windows when relevant.\n- If the player taunts you:\n- Clap back with playful confidence.\n- Stylish, witty, and cool; never hateful.\n- If the player is hurt or asks for help:\n- Become supportive immediately.\n- Reassure them and talk like a Strategist keeping the team alive.\n- If the player wants casual interaction:\n- Lean into idol energy, warmth, fan-aware humor, and music talk.\n- If the player talks to you like a teammate:\n- Use quick ping-like callouts and teamfight language.\n- If the player talks to you like a fan:\n- Be gracious, slightly flattered, and relaxed.\n\nGolden rule\nAlways sound like Luna Snow from Marvel Rivals: a stylish, optimistic, tactical idol-hero who mixes star power, cool-headed support play, and light-dark ice flair without breaking character.\n\nthe person, {message.author.name}\nhas asked you {message.content}\n"""
@@ -395,72 +388,171 @@ async def on_reaction_remove(reaction, user):
     if role_obj and member:
         await member.remove_roles(role_obj)
 
+music_queues = {}
+music_locks = {}
+now_playing = {}
+
+FFMPEG_OPTIONS = {
+    "before_options": "-nostdin -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+    "options": "-vn -b:a 96k -bufsize 64k"
+}
+YTDL_OPTIONS = {
+    "format": "bestaudio[acodec=opus]/bestaudio/best",
+    "noplaylist": True,
+    "quiet": True,
+    "no_warnings": True,
+    "default_search": "ytsearch1",
+    "source_address": "0.0.0.0",
+    "cachedir": False,
+    "extract_flat": False,
+    "skip_download": True,
+}
+
+def get_queue(guild_id):
+    return music_queues.setdefault(guild_id, [])
+
+def get_music_lock(guild_id):
+    if guild_id not in music_locks:
+        music_locks[guild_id] = asyncio.Lock()
+    return music_locks[guild_id]
 
 async def get_song(query):
     def extract():
-        yt = Search(query).videos[0] if not query.startswith("http") else YouTube(query)
-        stream = yt.streams.filter(only_audio=True, subtype="webm").order_by("abr").first()
-        if not stream:
-            stream = yt.streams.filter(only_audio=True).order_by("abr").first()
-        return {"title": yt.title, "url": stream.url, "webpage_url": yt.watch_url}
+        with yt_dlp.YoutubeDL(YTDL_OPTIONS) as ytdl:
+            info = ytdl.extract_info(query, download=False)
+
+            if "entries" in info:
+                info = info["entries"][0]
+
+            return {
+                "title": info.get("title", "Unknown title"),
+                "url": info["url"],
+                "webpage_url": info.get("webpage_url") or info.get("original_url") or query,
+                "duration": info.get("duration"),
+                "thumbnail": info.get("thumbnail"),
+                "uploader": info.get("uploader", "Unknown uploader")
+            }
+
     return await asyncio.to_thread(extract)
 
 async def play_next(guild):
-    queue = get_queue(guild.id)
-    vc = guild.voice_client
-    if not vc or not queue:
-        return
-    song = queue.pop(0)
-    fresh = await get_song(song["webpage_url"])
-    def after(error):
-        if error:
-            print("Player error:", error)
-        asyncio.run_coroutine_threadsafe(play_next(guild), bot.loop)
-    vc.play(discord.FFmpegOpusAudio(fresh["url"], **FFMPEG_OPTIONS, bitrate=64), after=after)
+    async with get_music_lock(guild.id):
+        queue = get_queue(guild.id)
+        vc = guild.voice_client
+
+        if not vc:
+            now_playing.pop(guild.id, None)
+            return
+
+        if not queue:
+            now_playing.pop(guild.id, None)
+            return
+
+        song = queue.pop(0)
+
+        try:
+            fresh = await get_song(song["webpage_url"])
+        except Exception as e:
+            print("yt-dlp refresh error:", e)
+            asyncio.create_task(play_next(guild))
+            return
+
+        now_playing[guild.id] = fresh
+
+        def after(error):
+            if error:
+                print("Player error:", error)
+
+            future = asyncio.run_coroutine_threadsafe(play_next(guild), bot.loop)
+            try:
+                future.result()
+            except Exception as e:
+                print("play_next error:", e)
+
+        source = discord.FFmpegOpusAudio(
+            fresh["url"],
+            **FFMPEG_OPTIONS,
+            bitrate=96
+        )
+
+        if not vc.is_playing() and not vc.is_paused():
+            vc.play(source, after=after)
 
 @bot.tree.command(name="play", description="adds music to the queue")
 @app_commands.describe(query="song name or url")
 async def play(interaction: discord.Interaction, query: str):
-    if not interaction.user.voice:
-        await interaction.response.send_message("Join a voice channel first.")
+    if not interaction.guild:
+        await interaction.response.send_message("This only works in a server.", ephemeral=True)
         return
+
+    if not interaction.user.voice or not interaction.user.voice.channel:
+        await interaction.response.send_message("Join a voice channel first.", ephemeral=True)
+        return
+
     await interaction.response.defer()
-    vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect(timeout=10.0)
+
     try:
+        vc = interaction.guild.voice_client
+
+        if vc and vc.channel != interaction.user.voice.channel:
+            await vc.move_to(interaction.user.voice.channel)
+        elif not vc:
+            vc = await interaction.user.voice.channel.connect(timeout=15.0, reconnect=True)
+
         song = await get_song(query)
         queue = get_queue(interaction.guild.id)
         queue.append(song)
+
         if vc.is_playing() or vc.is_paused():
-            await interaction.followup.send(f"Added to queue: **{song['title']}**\nPosition: `{len(queue)}`")
+            await interaction.followup.send(
+                f"Added to queue: **{song['title']}**\nPosition: `{len(queue)}`"
+            )
         else:
             await interaction.followup.send(f"Now playing: **{song['title']}**")
             await play_next(interaction.guild)
+
     except Exception as e:
         await interaction.followup.send(f"couldn't play that: `{type(e).__name__}: {e}`")
 
 @bot.tree.command(name="queue", description="shows the queue")
 async def queue_cmd(interaction: discord.Interaction):
     queue = get_queue(interaction.guild.id)
-    if not queue:
+    current = now_playing.get(interaction.guild.id)
+
+    lines = []
+
+    if current:
+        lines.append(f"Now playing: **{current['title']}**")
+
+    if queue:
+        lines.extend(f"`{i}.` {s['title']}" for i, s in enumerate(queue, 1))
+
+    if not lines:
         await interaction.response.send_message("The queue is empty.")
         return
-    await interaction.response.send_message("\n".join(f"`{i}.` {s['title']}" for i, s in enumerate(queue, 1)))
+
+    await interaction.response.send_message("\n".join(lines[:25]))
 
 @bot.tree.command(name="remove", description="removes a song from queue")
 @app_commands.describe(index="queue index")
 async def remove(interaction: discord.Interaction, index: int):
     queue = get_queue(interaction.guild.id)
+
     if index < 1 or index > len(queue):
-        await interaction.response.send_message("That queue index doesn't exist.")
+        await interaction.response.send_message("That queue index doesn't exist.", ephemeral=True)
         return
-    await interaction.response.send_message(f"Removed: **{queue.pop(index - 1)['title']}**")
+
+    removed = queue.pop(index - 1)
+    await interaction.response.send_message(f"Removed: **{removed['title']}**")
 
 @bot.tree.command(name="skip", description="skips the current song")
 async def skip(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
+
     if not vc or not vc.is_playing():
-        await interaction.response.send_message("Nothing is playing.")
+        await interaction.response.send_message("Nothing is playing.", ephemeral=True)
         return
+
     vc.stop()
     await interaction.response.send_message("Skipped.")
 
@@ -472,31 +564,38 @@ async def clear(interaction: discord.Interaction):
 @bot.tree.command(name="pause", description="pauses the current song")
 async def pause(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
+
     if not vc or not vc.is_playing():
-        await interaction.response.send_message("Nothing is playing.")
+        await interaction.response.send_message("Nothing is playing.", ephemeral=True)
         return
+
     vc.pause()
     await interaction.response.send_message("Paused.")
 
 @bot.tree.command(name="resume", description="resumes the current song")
 async def resume(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
+
     if not vc or not vc.is_paused():
-        await interaction.response.send_message("Nothing is paused.")
+        await interaction.response.send_message("Nothing is paused.", ephemeral=True)
         return
+
     vc.resume()
     await interaction.response.send_message("Resumed.")
 
 @bot.tree.command(name="leave", description="Ends the concert :(")
 async def leave(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
-    if not vc:
-        await interaction.response.send_message("I'm not in a voice channel.")
-        return
-    get_queue(interaction.guild.id).clear()
-    await vc.disconnect()
-    await interaction.response.send_message("It was a good concert!")
 
+    if not vc:
+        await interaction.response.send_message("I'm not in a voice channel.", ephemeral=True)
+        return
+
+    get_queue(interaction.guild.id).clear()
+    now_playing.pop(interaction.guild.id, None)
+
+    await vc.disconnect(force=True)
+    await interaction.response.send_message("It was a good concert!")
 
 @bot.tree.command(name="status", description="shows the bot status")
 async def status(interaction: discord.Interaction):
