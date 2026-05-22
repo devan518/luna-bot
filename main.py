@@ -286,8 +286,13 @@ async def sync(interaction: discord.Interaction):
 @app_commands.choices(emote=[app_commands.Choice(name="Dance of Ice and Fire", value="Dance_of_Ice_and_Fire"),app_commands.Choice(name="Frosty Fortress", value="Frosty_Fortress"),app_commands.Choice(name="Cocoa Conjuring", value="Cocoa_Conjuring"),app_commands.Choice(name="Disco", value="Disco"),app_commands.Choice(name="Cyber Tunes", value="Cyber_Tunes"),app_commands.Choice(name="Rehearsal Rhythm", value="Rehearsal_Rhythm"),app_commands.Choice(name="Little Oopsie", value="Little_Oopsie"),app_commands.Choice(name="Default", value="Default"),app_commands.Choice(name="BRAIN BLAST", value="BRAIN_BLAST"),app_commands.Choice(name="Take A Seat", value="Take_A_Seat"),app_commands.Choice(name="ballin", value="ballin")])
 async def emote(interaction: discord.Interaction, emote: app_commands.Choice[str]):
     emotes = {"Dance_of_Ice_and_Fire": "https://static.wikia.nocookie.net/marvel-rivals/images/d/dc/Luna_Snow_Emote_-_Dance_of_Ice_and_Fire_Full.mp4","Frosty_Fortress": "https://static.wikia.nocookie.net/marvel-rivals/images/2/26/Luna_Snow_Emote_-_Frosty_Fortress_Full.mp4","Cocoa_Conjuring": "https://static.wikia.nocookie.net/marvel-rivals/images/3/3a/Luna_Snow_Emote_-_Cocoa_Conjuring_Full.mp4","Disco": "https://static.wikia.nocookie.net/marvel-rivals/images/e/eb/Luna_Snow_Emote_-_Disco_Anniversary_Full.mp4","Cyber_Tunes": "https://static.wikia.nocookie.net/marvel-rivals/images/9/95/Luna_Snow_Emote_-_Cyber_Tunes_Full.mp4","Rehearsal_Rhythm": "https://static.wikia.nocookie.net/marvel-rivals/images/3/3a/Luna_Snow_Emote_-_Rehearsal_Rhythm_Full.mp4","Little_Oopsie": "https://static.wikia.nocookie.net/marvel-rivals/images/1/1b/Luna_Snow_Emote_-_Little_Oopsie_Full.mp4","Default": "https://static.wikia.nocookie.net/marvel-rivals/images/0/00/Luna_Snow_Emote_-_DEFAULT_Full.mp4","BRAIN_BLAST": "https://static.wikia.nocookie.net/marvel-rivals/images/e/ed/Luna_Snow_Emote_-_BRAIN_BLAST_Full.mp4","Take_A_Seat": "https://static.wikia.nocookie.net/marvel-rivals/images/e/ed/Luna_Snow_Emote_-_Take_A_Seat_Full.mp4","ballin": "https://cdn.discordapp.com/attachments/1466849815194505525/1502761690574360586/image.png?ex=6a00e362&is=69ff91e2&hm=0c069f1051fc6aff79c8bf148cfd84e443caf3df849b4a1900b315b6181baf29"}
-    lines = {"Dance_of_Ice_and_Fire": "i love you!","Frosty_Fortress": "im making my own one after my teammates couldnt push dracula's one in comp","Cocoa_Conjuring": "yummy","Disco": "소문 겨벼!","Cyber_Tunes": "ooh yeah!","Rehearsal_Rhythm": "im breaking it down baby","Little_Oopsie": "'no clue what to make this line' - devan","Default": "hi!","BRAIN_BLAST": "'no clue what to make this line' - devan","Take_A_Seat": "I've been standing for so long!","ballin": "LEBRONNN",}
-    await interaction.response.send_message(f"[{lines[emote.value]}]({emotes[emote.value]})")
+    embed = discord.Embed(
+        title=emote.name,
+        color=discord.Color.blue()
+    )
+    emote_url = emotes[emote.value]
+    embed.set_image(url=f"https://res.cloudinary.com/dbqc6y65r/video/fetch/f_gif,w_480/{quote(emote_url, safe='')}")
+    await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="lie-detect", description="determines whether a message is true or not")
 async def lie_detect(interaction: discord.Interaction, statement: str = ""):
@@ -332,7 +337,7 @@ async def role(interaction: discord.Interaction, roles: str = ""):
     role_emoji_pairs = list(zip(allowed_roles, emojis))
     chunks = [role_emoji_pairs[i:i + CHUNK_SIZE] for i in range(0, len(role_emoji_pairs), CHUNK_SIZE)]
 
-    await interaction.response.send_message(f"Preparing to send {len(chunks)} reaction role message(s)...", ephemeral=True)
+    await interaction.response.send_message(f"Preparing to send {len(chunks)} reaction role message(s)...")
 
     for i, chunk in enumerate(chunks):
         embed = discord.Embed(
@@ -372,10 +377,16 @@ async def on_reaction_add(reaction, user):
     role_id = reaction_role_messages[reaction.message.id].get(str(reaction.emoji))
     role_obj = reaction.message.guild.get_role(role_id)
     member = reaction.message.guild.get_member(user.id)
+    if member is None:
+        member = await reaction.message.guild.fetch_member(user.id)
 
     if role_obj and member:
-        await member.add_roles(role_obj)
-
+        try:
+            await member.add_roles(role_obj)
+        except Exception as e:
+            await reaction.message.channel.send(
+                f"Could not give {role_obj.mention} to {member.mention}: `{e}`"
+            )
 @bot.event
 async def on_reaction_remove(reaction, user):
     if user.bot or reaction.message.id not in reaction_role_messages:
@@ -384,9 +395,16 @@ async def on_reaction_remove(reaction, user):
     role_id = reaction_role_messages[reaction.message.id].get(str(reaction.emoji))
     role_obj = reaction.message.guild.get_role(role_id)
     member = reaction.message.guild.get_member(user.id)
+    if member is None:
+        member = await reaction.message.guild.fetch_member(user.id)
 
     if role_obj and member:
-        await member.remove_roles(role_obj)
+        try:
+            await member.remove_roles(role_obj)
+        except Exception as e:
+            await reaction.message.channel.send(
+                f"Could not give {role_obj.mention} to {member.mention}: `{e}`"
+            )
 
 music_queues = {}
 music_locks = {}
@@ -406,6 +424,7 @@ YTDL_OPTIONS = {
     "cachedir": False,
     "extract_flat": False,
     "skip_download": True,
+    "cookiefile": "cookies.txt",    
 }
 
 def get_queue(guild_id):
@@ -478,13 +497,16 @@ async def play_next(guild):
         if not vc.is_playing() and not vc.is_paused():
             vc.play(source, after=after)
 
-@bot.tree.command(name="play", description="adds music to the queue")
-@app_commands.describe(query="song name or url")
-async def play(interaction: discord.Interaction, query: str):
-    if not interaction.guild:
-        await interaction.response.send_message("This only works in a server.", ephemeral=True)
-        return
 
+def in_same_channel(interaction: discord.Interaction) -> bool:
+    vc = interaction.guild.voice_client
+    return bool(vc and interaction.user.voice and interaction.user.voice.channel == vc.channel)
+
+music_group = app_commands.Group(name="music", description="Music controls")
+
+@music_group.command(name="play", description="Play a song from a name or URL")
+@app_commands.describe(query="The song name or URL")
+async def play(interaction: discord.Interaction, query: str):
     if not interaction.user.voice or not interaction.user.voice.channel:
         await interaction.response.send_message("Join a voice channel first.", ephemeral=True)
         return
@@ -512,10 +534,10 @@ async def play(interaction: discord.Interaction, query: str):
             await play_next(interaction.guild)
 
     except Exception as e:
-        await interaction.followup.send(f"couldn't play that: `{type(e).__name__}: {e}`")
+        await interaction.followup.send(f"Couldn't play that: `{type(e).__name__}: {e}`")
 
-@bot.tree.command(name="queue", description="shows the queue")
-async def queue_cmd(interaction: discord.Interaction):
+@music_group.command(name="queue", description="View the current song queue")
+async def queue(interaction: discord.Interaction):
     queue = get_queue(interaction.guild.id)
     current = now_playing.get(interaction.guild.id)
 
@@ -533,9 +555,12 @@ async def queue_cmd(interaction: discord.Interaction):
 
     await interaction.response.send_message("\n".join(lines[:25]))
 
-@bot.tree.command(name="remove", description="removes a song from queue")
-@app_commands.describe(index="queue index")
+@music_group.command(name="remove", description="Remove a specific song from the queue")
+@app_commands.describe(index="Queue index for remove")
 async def remove(interaction: discord.Interaction, index: int):
+    if not in_same_channel(interaction):
+        return await interaction.response.send_message("You must be in my voice channel to do that.", ephemeral=True)
+
     queue = get_queue(interaction.guild.id)
 
     if index < 1 or index > len(queue):
@@ -545,57 +570,70 @@ async def remove(interaction: discord.Interaction, index: int):
     removed = queue.pop(index - 1)
     await interaction.response.send_message(f"Removed: **{removed['title']}**")
 
-@bot.tree.command(name="skip", description="skips the current song")
+@music_group.command(name="skip", description="Skip the current playing song")
 async def skip(interaction: discord.Interaction):
+    if not in_same_channel(interaction):
+        return await interaction.response.send_message("You must be in my voice channel to do that.", ephemeral=True)
+
     vc = interaction.guild.voice_client
 
-    if not vc or not vc.is_playing():
+    if not vc.is_playing() and not vc.is_paused():
         await interaction.response.send_message("Nothing is playing.", ephemeral=True)
         return
 
     vc.stop()
     await interaction.response.send_message("Skipped.")
 
-@bot.tree.command(name="clear", description="clears the queue")
+@music_group.command(name="clear", description="Clear all songs from the queue")
 async def clear(interaction: discord.Interaction):
+    if not in_same_channel(interaction):
+        return await interaction.response.send_message("You must be in my voice channel to do that.", ephemeral=True)
+
     get_queue(interaction.guild.id).clear()
     await interaction.response.send_message("Queue cleared.")
 
-@bot.tree.command(name="pause", description="pauses the current song")
+@music_group.command(name="pause", description="Pause the currently playing song")
 async def pause(interaction: discord.Interaction):
+    if not in_same_channel(interaction):
+        return await interaction.response.send_message("You must be in my voice channel to do that.", ephemeral=True)
+
     vc = interaction.guild.voice_client
 
-    if not vc or not vc.is_playing():
-        await interaction.response.send_message("Nothing is playing.", ephemeral=True)
+    if not vc.is_playing():
+        await interaction.response.send_message("Nothing is playing right now.", ephemeral=True)
         return
 
     vc.pause()
     await interaction.response.send_message("Paused.")
 
-@bot.tree.command(name="resume", description="resumes the current song")
+@music_group.command(name="resume", description="Resume a paused song")
 async def resume(interaction: discord.Interaction):
+    if not in_same_channel(interaction):
+        return await interaction.response.send_message("You must be in my voice channel to do that.", ephemeral=True)
+
     vc = interaction.guild.voice_client
 
-    if not vc or not vc.is_paused():
+    if not vc.is_paused():
         await interaction.response.send_message("Nothing is paused.", ephemeral=True)
         return
 
     vc.resume()
     await interaction.response.send_message("Resumed.")
 
-@bot.tree.command(name="leave", description="Ends the concert :(")
+@music_group.command(name="leave", description="Disconnect the bot and clear the queue")
 async def leave(interaction: discord.Interaction):
-    vc = interaction.guild.voice_client
+    if not in_same_channel(interaction):
+        return await interaction.response.send_message("You must be in my voice channel to do that.", ephemeral=True)
 
-    if not vc:
-        await interaction.response.send_message("I'm not in a voice channel.", ephemeral=True)
-        return
+    vc = interaction.guild.voice_client
 
     get_queue(interaction.guild.id).clear()
     now_playing.pop(interaction.guild.id, None)
 
     await vc.disconnect(force=True)
     await interaction.response.send_message("It was a good concert!")
+
+bot.tree.add_command(music_group)
 
 @bot.tree.command(name="status", description="shows the bot status")
 async def status(interaction: discord.Interaction):
