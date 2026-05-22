@@ -291,7 +291,12 @@ async def emote(interaction: discord.Interaction, emote: app_commands.Choice[str
         color=discord.Color.blue()
     )
     emote_url = emotes[emote.value]
-    embed.set_image(url=f"https://res.cloudinary.com/dbqc6y65r/video/fetch/f_gif,w_480/{quote(emote_url, safe='')}")
+    gif_url = f"https://res.cloudinary.com/dbqc6y65r/video/fetch/f_gif,w_480/{quote(emote_url, safe='')}"
+    async with aiohttp.ClientSession() as session:
+        async with session.get(gif_url) as resp:
+            await resp.read()
+    #preload gif from cloudinary
+    embed.set_image(url=gif_url)
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="lie-detect", description="determines whether a message is true or not")
