@@ -102,7 +102,7 @@ async def on_message(message):
 
         triggered = False
 
-        if message.content.lower().strip().endswith("why", "why?"):
+        if message.content.lower().strip().endswith(("why", "why?")):
             await message.reply("cuz we're playing bendy 🤑")
             triggered = True
 
