@@ -83,6 +83,9 @@ async def on_message(message):
                         await message.reply(ollmaresponse[:2000])
                     except Exception as e:
                         await message.reply(f"im currently being dived!! \n{e}")
+    
+    if message.content.lower().strip().endswith("why"):
+        await message.reply("cuz we're playing bendy 🤑")
 
     if message.content.lower().strip() == "actually brilliant":
         if message.guild is None:
