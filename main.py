@@ -308,9 +308,9 @@ async def emote(interaction: discord.Interaction, emote: app_commands.Choice[str
 @bot.tree.command(name="lie-detect", description="determines whether a message is true or not")
 async def lie_detect(interaction: discord.Interaction, statement: str = ""):
     if random.choice([True, False]):
-        await interaction.response.send_message(f"'{statement}', is definitely true!")
+        await interaction.response.send_message(f"'{statement}', is definitely true!\nhttps://tenor.com/view/marvel-rivals-true-morgan-freeman-luna-snow-mvp-gif-4042813874185287785")
     else:
-        await interaction.response.send_message(f"'{statement}', is a lie, shall i freeze the evidence?")
+        await interaction.response.send_message(f"'{statement}', i love lin **LIE**\nhttps://tenor.com/view/josrot-twauhub-marvel-rivals-lin-lie-ironfist-gif-12091472293592747688")
 
 
 @bot.tree.command(name="role", description="sends a reaction role message")
