@@ -312,6 +312,10 @@ async def lie_detect(interaction: discord.Interaction, statement: str = ""):
     else:
         await interaction.response.send_message(f"'{statement}', i love lin **LIE**\nhttps://tenor.com/view/josrot-twauhub-marvel-rivals-lin-lie-ironfist-gif-12091472293592747688")
 
+@bot.tree.command(name="debug_perms")
+async def debug_perms(interaction: discord.Interaction):
+    perms = interaction.channel.permissions_for(interaction.guild.me)
+    await interaction.response.send_message(f"Can I send messages? {perms.send_messages}\nCan I embed links? {perms.embed_links}\nCan I add reactions? {perms.add_reactions}")
 
 @bot.tree.command(name="role", description="sends a reaction role message")
 @app_commands.describe(roles="roles NOT to include, separated by commas")
