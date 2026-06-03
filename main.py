@@ -315,24 +315,23 @@ async def lie_detect(interaction: discord.Interaction, statement: str = ""):
 
 @bot.tree.command(name="role", description="sends a reaction role message")
 @app_commands.describe(roles="roles NOT to include, separated by commas")
-#@app_commands.checks.has_any_role()
 async def role(interaction: discord.Interaction, roles: str = ""):
-    if interaction.user.id != 1020374865410277406:
-        await interaction.response.send_message(
-            "you don't have permission to use this.",
-            ephemeral=True
-        )
-        return
-    
     if interaction.guild is None:
         await interaction.response.send_message("this only works in a server", ephemeral=True)
         return
 
+    if interaction.user.id != DEVAN_TESTING_ID:
+        await interaction.response.send_message("you don't have permission to use this.", ephemeral=True)
+        return
+
     role_ids = []
+
     for item in roles.split(","):
         item = item.strip()
+
         if not item:
             continue
+
         if item.startswith("<@&") and item.endswith(">"):
             role_ids.append(int(item[3:-1]))
         else:
@@ -340,7 +339,13 @@ async def role(interaction: discord.Interaction, roles: str = ""):
             if found:
                 role_ids.append(found.id)
 
-    allowed_roles = [r for r in interaction.guild.roles if not r.is_default() and not r.managed and r.id not in role_ids]
+    allowed_roles = [
+        r for r in interaction.guild.roles
+        if not r.is_default()
+        and not r.managed
+        and r.id not in role_ids
+        and r < interaction.guild.me.top_role
+    ]
 
     server_emojis = [str(e) for e in interaction.guild.emojis]
     normal_emojis = _safe_emojis
@@ -355,12 +360,14 @@ async def role(interaction: discord.Interaction, roles: str = ""):
     role_emoji_pairs = list(zip(allowed_roles, emojis))
     chunks = [role_emoji_pairs[i:i + CHUNK_SIZE] for i in range(0, len(role_emoji_pairs), CHUNK_SIZE)]
 
-    await interaction.response.send_message(f"Preparing to send {len(chunks)} reaction role message(s)...")
+    await interaction.response.send_message(
+        f"Preparing to send {len(chunks)} reaction role message(s)...",
+        ephemeral=True
+    )
 
     for i, chunk in enumerate(chunks):
         embed = discord.Embed(
-            title=f"Reaction Roles" + (f" (Part {i + 1})" if len(chunks) > 1 else ""),
-            description="React below to get a role.",
+            title="Reaction Roles" + (f" (Part {i + 1})" if len(chunks) > 1 else ""),
             color=discord.Color.blue()
         )
 
@@ -380,20 +387,39 @@ async def role(interaction: discord.Interaction, roles: str = ""):
             for emoji_obj in role_map:
                 try:
                     await msg.add_reaction(emoji_obj)
-                except:
-                    pass
+                except Exception as e:
+                    print(f"failed to add reaction {emoji_obj}: {e}")
 
         except discord.Forbidden as e:
-            await interaction.followup.send("I don't have permission to send messages here:\n" + e, ephemeral=True)
+            await interaction.followup.send(
+                f"I don't have permission to send messages here:\n`{e}`",
+                ephemeral=True
+            )
             break
+
+        except Exception as e:
+            await interaction.followup.send(
+                f"failed to send reaction role message:\n`{e}`",
+                ephemeral=True
+            )
+            break
+
 
 @bot.event
 async def on_reaction_add(reaction, user):
-    if user.bot or reaction.message.id not in reaction_role_messages:
+    if user.bot:
+        return
+
+    if reaction.message.id not in reaction_role_messages:
         return
 
     role_id = reaction_role_messages[reaction.message.id].get(str(reaction.emoji))
+
+    if role_id is None:
+        return
+
     role_obj = reaction.message.guild.get_role(role_id)
+
     member = reaction.message.guild.get_member(user.id)
     if member is None:
         member = await reaction.message.guild.fetch_member(user.id)
@@ -405,13 +431,23 @@ async def on_reaction_add(reaction, user):
             await reaction.message.channel.send(
                 f"Could not give {role_obj.mention} to {member.mention}: `{e}`"
             )
+
+
 @bot.event
 async def on_reaction_remove(reaction, user):
-    if user.bot or reaction.message.id not in reaction_role_messages:
+    if user.bot:
+        return
+
+    if reaction.message.id not in reaction_role_messages:
         return
 
     role_id = reaction_role_messages[reaction.message.id].get(str(reaction.emoji))
+
+    if role_id is None:
+        return
+
     role_obj = reaction.message.guild.get_role(role_id)
+
     member = reaction.message.guild.get_member(user.id)
     if member is None:
         member = await reaction.message.guild.fetch_member(user.id)
@@ -421,7 +457,7 @@ async def on_reaction_remove(reaction, user):
             await member.remove_roles(role_obj)
         except Exception as e:
             await reaction.message.channel.send(
-                f"Could not give {role_obj.mention} to {member.mention}: `{e}`"
+                f"Could not remove {role_obj.mention} from {member.mention}: `{e}`"
             )
 
 music_queues = {}
