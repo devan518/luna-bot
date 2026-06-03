@@ -315,7 +315,7 @@ async def lie_detect(interaction: discord.Interaction, statement: str = ""):
 
 @bot.tree.command(name="role", description="sends a reaction role message")
 @app_commands.describe(roles="roles NOT to include, separated by commas")
-@app_commands.checks.has_any_role(*mod_names)
+@app_commands.checks.has_any_role(DEVAN_TESTING_ID)
 async def role(interaction: discord.Interaction, roles: str = ""):
     if interaction.guild is None:
         await interaction.response.send_message("this only works in a server", ephemeral=True)
@@ -376,8 +376,8 @@ async def role(interaction: discord.Interaction, roles: str = ""):
                 except:
                     pass
 
-        except discord.Forbidden:
-            await interaction.followup.send("I don't have permission to send messages here.", ephemeral=True)
+        except discord.Forbidden as e:
+            await interaction.followup.send("I don't have permission to send messages here:\n" + e, ephemeral=True)
             break
 
 @bot.event
