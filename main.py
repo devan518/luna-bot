@@ -48,15 +48,23 @@ def get_config(guild_id):
 
 @bot.event
 async def on_ready():
+    commands = await bot.tree.sync()
+    print(f"synced {len(commands)} commands!")
     print(f"{bot.user} has connected to Discord!")
 
 @bot.tree.error
 async def on_app_command_error(interaction: discord.Interaction, error):
     if isinstance(error, app_commands.MissingAnyRole):
-        await interaction.response.send_message(
-            "you don't have permission to use this.",
-            ephemeral=True
-        )
+        message = "you don't have permission to use this."
+    else:
+        message = f"command crashed:\n`{type(error).__name__}: {error}`"
+        print(f"Slash command error: {type(error).__name__}: {error}")
+
+    if interaction.response.is_done():
+        await interaction.followup.send(message, ephemeral=True)
+    else:
+        await interaction.response.send_message(message, ephemeral=True)
+    
 
 @bot.event
 async def on_message(message):
@@ -65,7 +73,9 @@ async def on_message(message):
 
     if "{67?cghcmj}" in message.content.lower().strip():
         channel = bot.get_channel(message.channel.id)
-        await channel.send(f"{message.author.name}-san sent '{imsosorry.uwuify(message.content.replace("{67?cghcmj}", ""))}'")
+        await channel.send(
+            f"{message.author.name}-san sent '{imsosorry.uwuify(message.content.replace('{67?cghcmj}', ''))}'"
+        )
         await message.delete()
     
     if isinstance(message.channel, discord.DMChannel):
@@ -102,11 +112,7 @@ async def on_message(message):
 
         triggered = False
 
-        if message.content.lower().strip().endswith(("why", "why?")):
-            await message.reply("cuz we're playing bendy 🤑")
-            triggered = True
-
-        elif message.content.lower().strip() == "actually brilliant":
+        if message.content.lower().strip() == "actually brilliant":
             url = "https://cdn.discordapp.com/attachments/1466849815194505525/1499113206688383037/actuallybriliant-kirk.png?ex=69f98c38&is=69f83ab8&hm=f93ad4a5a6c5787f0e65e42735c96cfbdb8afb2af3693578f7475f86aafefd1c"
             await message.reply(url)
             triggered = True
@@ -281,13 +287,6 @@ async def set_points(interaction: discord.Interaction, username: str, points: in
 async def repeat(interaction: discord.Interaction, text: str):
     await interaction.response.send_message(text)
 
-@bot.tree.command(name="sync", description="syncs slash commands")
-@app_commands.checks.has_any_role(*mod_names)
-async def sync(interaction: discord.Interaction):
-    await interaction.response.defer(ephemeral=True)
-    synced = await bot.tree.sync()
-    await interaction.followup.send(f"synced {len(synced)} commands.", ephemeral=True)
-
 @bot.tree.command(name="emote", description="luna breaks it down")
 @app_commands.choices(emote=[app_commands.Choice(name="Dance of Ice and Fire", value="Dance_of_Ice_and_Fire"),app_commands.Choice(name="Frosty Fortress", value="Frosty_Fortress"),app_commands.Choice(name="Cocoa Conjuring", value="Cocoa_Conjuring"),app_commands.Choice(name="Disco", value="Disco"),app_commands.Choice(name="Cyber Tunes", value="Cyber_Tunes"),app_commands.Choice(name="Rehearsal Rhythm", value="Rehearsal_Rhythm"),app_commands.Choice(name="Little Oopsie", value="Little_Oopsie"),app_commands.Choice(name="Default", value="Default"),app_commands.Choice(name="BRAIN BLAST", value="BRAIN_BLAST"),app_commands.Choice(name="Take A Seat", value="Take_A_Seat"),app_commands.Choice(name="ballin", value="ballin")])
 async def emote(interaction: discord.Interaction, emote: app_commands.Choice[str]):
@@ -314,8 +313,18 @@ async def lie_detect(interaction: discord.Interaction, statement: str = ""):
 
 @bot.tree.command(name="debug_perms")
 async def debug_perms(interaction: discord.Interaction):
-    perms = interaction.channel.permissions_for(interaction.guild.me)
-    await interaction.response.send_message(f"Can I send messages? {perms.send_messages}\nCan I embed links? {perms.embed_links}\nCan I add reactions? {perms.add_reactions}")
+    if interaction.guild is None:
+        return
+
+    bot_member = interaction.guild.me
+    permissions = interaction.channel.permissions_for(bot_member)
+
+    enabled_perms = [perm_name for perm_name, value in permissions if value]
+
+    await interaction.response.send_message(
+        "\n".join(enabled_perms),
+        ephemeral=True
+    )
 
 @bot.tree.command(name="role", description="sends a reaction role message")
 @app_commands.describe(roles="roles NOT to include, separated by commas")
@@ -370,22 +379,20 @@ async def role(interaction: discord.Interaction, roles: str = ""):
     )
 
     for i, chunk in enumerate(chunks):
-        embed = discord.Embed(
-            title="Reaction Roles" + (f" (Part {i + 1})" if len(chunks) > 1 else ""),
-            color=discord.Color.blue()
-        )
-
         role_map = {}
         lines = []
+
+        title = "Reaction Roles" + (f" (Part {i + 1})" if len(chunks) > 1 else "")
+        lines.append(f"**{title}**\n")
 
         for role_obj, emoji_obj in chunk:
             lines.append(f"{emoji_obj} — {role_obj.mention}")
             role_map[str(emoji_obj)] = role_obj.id
 
-        embed.description = "\n".join(lines)
+        message_content = "\n".join(lines)
 
         try:
-            msg = await interaction.channel.send(embed=embed)
+            msg = await interaction.channel.send(message_content)
             reaction_role_messages[msg.id] = role_map
 
             for emoji_obj in role_map:
@@ -408,59 +415,72 @@ async def role(interaction: discord.Interaction, roles: str = ""):
             )
             break
 
-
 @bot.event
-async def on_reaction_add(reaction, user):
-    if user.bot:
+async def on_raw_reaction_add(payload):
+    if payload.user_id == bot.user.id:
         return
 
-    if reaction.message.id not in reaction_role_messages:
+    if payload.message_id not in reaction_role_messages:
         return
 
-    role_id = reaction_role_messages[reaction.message.id].get(str(reaction.emoji))
+    role_id = reaction_role_messages[payload.message_id].get(str(payload.emoji))
 
     if role_id is None:
         return
 
-    role_obj = reaction.message.guild.get_role(role_id)
+    guild = bot.get_guild(payload.guild_id)
+    if guild is None:
+        return
 
-    member = reaction.message.guild.get_member(user.id)
+    role_obj = guild.get_role(role_id)
+    if role_obj is None:
+        return
+
+    member = guild.get_member(payload.user_id)
     if member is None:
-        member = await reaction.message.guild.fetch_member(user.id)
+        member = await guild.fetch_member(payload.user_id)
 
-    if role_obj and member:
-        try:
-            await member.add_roles(role_obj)
-        except Exception as e:
-            await reaction.message.channel.send(
+    try:
+        await member.add_roles(role_obj)
+    except Exception as e:
+        channel = bot.get_channel(payload.channel_id)
+        if channel:
+            await channel.send(
                 f"Could not give {role_obj.mention} to {member.mention}: `{e}`"
             )
 
 
 @bot.event
-async def on_reaction_remove(reaction, user):
-    if user.bot:
+async def on_raw_reaction_remove(payload):
+    if payload.user_id == bot.user.id:
         return
 
-    if reaction.message.id not in reaction_role_messages:
+    if payload.message_id not in reaction_role_messages:
         return
 
-    role_id = reaction_role_messages[reaction.message.id].get(str(reaction.emoji))
+    role_id = reaction_role_messages[payload.message_id].get(str(payload.emoji))
 
     if role_id is None:
         return
 
-    role_obj = reaction.message.guild.get_role(role_id)
+    guild = bot.get_guild(payload.guild_id)
+    if guild is None:
+        return
 
-    member = reaction.message.guild.get_member(user.id)
+    role_obj = guild.get_role(role_id)
+    if role_obj is None:
+        return
+
+    member = guild.get_member(payload.user_id)
     if member is None:
-        member = await reaction.message.guild.fetch_member(user.id)
+        member = await guild.fetch_member(payload.user_id)
 
-    if role_obj and member:
-        try:
-            await member.remove_roles(role_obj)
-        except Exception as e:
-            await reaction.message.channel.send(
+    try:
+        await member.remove_roles(role_obj)
+    except Exception as e:
+        channel = bot.get_channel(payload.channel_id)
+        if channel:
+            await channel.send(
                 f"Could not remove {role_obj.mention} from {member.mention}: `{e}`"
             )
 
