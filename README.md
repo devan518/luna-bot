@@ -4,7 +4,6 @@
   <img src="https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/discord.py-2.0+-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="discord.py">
   <img src="https://img.shields.io/github/license/devan518/luna-bot?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/github/issues/devan518/luna-bot?style=for-the-badge" alt="Issues">
 </p>
 
 <br />
