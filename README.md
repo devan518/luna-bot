@@ -4,7 +4,6 @@
   <img src="https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.11+">
   <img src="https://img.shields.io/badge/discord.py-2.0+-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="discord.py">
   <img src="https://img.shields.io/github/license/devan518/luna-bot?style=for-the-badge" alt="License">
-  <img src="https://img.shields.io/github/issues/devan518/luna-bot?style=for-the-badge" alt="Issues">
 </p>
 
 <br />
@@ -16,7 +15,7 @@
 <h1 align="center">LunaBot</h1>
 
 <p align="center">
-  A Luna Snow themed Discord bot for Marvel Rivals fans!
+  Your server's <b>coolest</b> bot 
   <br />
   <br />
   <a href="https://discord.com/oauth2/authorize?client_id=1496972614722257107&permissions=0&integration_type=0&scope=bot">
