@@ -15,7 +15,7 @@
 <h1 align="center">LunaBot</h1>
 
 <p align="center">
-  A Luna Snow themed Discord bot for Marvel Rivals fans!
+  Your server's <b>coolest</b> bot 
   <br />
   <br />
   <a href="https://discord.com/oauth2/authorize?client_id=1496972614722257107&permissions=0&integration_type=0&scope=bot">
