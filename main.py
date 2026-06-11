@@ -283,18 +283,8 @@ async def repeat(interaction: discord.Interaction, text: str):
 @app_commands.choices(emote=[app_commands.Choice(name="Dance of Ice and Fire", value="Dance_of_Ice_and_Fire"),app_commands.Choice(name="Frosty Fortress", value="Frosty_Fortress"),app_commands.Choice(name="Cocoa Conjuring", value="Cocoa_Conjuring"),app_commands.Choice(name="Disco", value="Disco"),app_commands.Choice(name="Cyber Tunes", value="Cyber_Tunes"),app_commands.Choice(name="Rehearsal Rhythm", value="Rehearsal_Rhythm"),app_commands.Choice(name="Little Oopsie", value="Little_Oopsie"),app_commands.Choice(name="Default", value="Default"),app_commands.Choice(name="BRAIN BLAST", value="BRAIN_BLAST"),app_commands.Choice(name="Take A Seat", value="Take_A_Seat"),app_commands.Choice(name="ballin", value="ballin")])
 async def emote(interaction: discord.Interaction, emote: app_commands.Choice[str]):
     emotes = {"Dance_of_Ice_and_Fire": "https://static.wikia.nocookie.net/marvel-rivals/images/d/dc/Luna_Snow_Emote_-_Dance_of_Ice_and_Fire_Full.mp4","Frosty_Fortress": "https://static.wikia.nocookie.net/marvel-rivals/images/2/26/Luna_Snow_Emote_-_Frosty_Fortress_Full.mp4","Cocoa_Conjuring": "https://static.wikia.nocookie.net/marvel-rivals/images/3/3a/Luna_Snow_Emote_-_Cocoa_Conjuring_Full.mp4","Disco": "https://static.wikia.nocookie.net/marvel-rivals/images/e/eb/Luna_Snow_Emote_-_Disco_Anniversary_Full.mp4","Cyber_Tunes": "https://static.wikia.nocookie.net/marvel-rivals/images/9/95/Luna_Snow_Emote_-_Cyber_Tunes_Full.mp4","Rehearsal_Rhythm": "https://static.wikia.nocookie.net/marvel-rivals/images/3/3a/Luna_Snow_Emote_-_Rehearsal_Rhythm_Full.mp4","Little_Oopsie": "https://static.wikia.nocookie.net/marvel-rivals/images/1/1b/Luna_Snow_Emote_-_Little_Oopsie_Full.mp4","Default": "https://static.wikia.nocookie.net/marvel-rivals/images/0/00/Luna_Snow_Emote_-_DEFAULT_Full.mp4","BRAIN_BLAST": "https://static.wikia.nocookie.net/marvel-rivals/images/e/ed/Luna_Snow_Emote_-_BRAIN_BLAST_Full.mp4","Take_A_Seat": "https://static.wikia.nocookie.net/marvel-rivals/images/e/ed/Luna_Snow_Emote_-_Take_A_Seat_Full.mp4","ballin": "https://cdn.discordapp.com/attachments/1466849815194505525/1502761690574360586/image.png?ex=6a00e362&is=69ff91e2&hm=0c069f1051fc6aff79c8bf148cfd84e443caf3df849b4a1900b315b6181baf29"}
-    embed = discord.Embed(
-        title=emote.name,
-        color=discord.Color.blue()
-    )
-    emote_url = emotes[emote.value]
-    gif_url = f"https://res.cloudinary.com/dbqc6y65r/video/fetch/f_gif,w_480/{quote(emote_url, safe='')}"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(gif_url) as resp:
-            await resp.read()
-    #preload gif from cloudinary
-    embed.set_image(url=gif_url)
-    await interaction.response.send_message(embed=embed)
+    url = emotes[emote.value]
+    await interaction.response.send_message(url)
 
 @bot.tree.command(name="lie-detect", description="determines whether a message is true or not")
 async def lie_detect(interaction: discord.Interaction, statement: str = ""):
