@@ -14,7 +14,6 @@ from urllib.parse import quote
 from ollamafreeapi import OllamaFreeAPI
 import firebase_admin
 from firebase_admin import credentials, firestore
-import imsosorry
 
 cred = credentials.Certificate("luna-bot-487b8-firebase-adminsdk-fbsvc-863e32516e.json")
 firebase_admin.initialize_app(cred)
@@ -70,13 +69,6 @@ async def on_app_command_error(interaction: discord.Interaction, error):
 async def on_message(message):
     if message.author.bot:
         return
-
-    if "{67?cghcmj}" in message.content.lower().strip():
-        channel = bot.get_channel(message.channel.id)
-        await channel.send(
-            f"{message.author.name}-san sent '{imsosorry.uwuify(message.content.replace('{67?cghcmj}', ''))}'"
-        )
-        await message.delete()
     
     if isinstance(message.channel, discord.DMChannel):
         async with aiohttp.ClientSession() as session:
@@ -714,8 +706,9 @@ async def leave(interaction: discord.Interaction):
 bot.tree.add_command(music_group)
 
 @bot.tree.command(name="status", description="shows the bot status")
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def status(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(ephemeral=False)
 
     try:
         uptime = int(time.time() - start_time)
@@ -724,41 +717,48 @@ async def status(interaction: discord.Interaction):
 
         latency = round(bot.latency * 1000)
         guild = interaction.guild
-        users = guild.member_count or 0
 
-        vc = guild.voice_client if guild else None
-        voice_status = "Not connected"
-        if vc:
-            voice_status = f"Connected to {vc.channel.name}"
-            if vc.is_playing():
-                voice_status += " | Playing"
-            elif vc.is_paused():
-                voice_status += " | Paused"
-            else:
-                voice_status += " | Idle"
+        embed = discord.Embed(
+            title="Luna Bot Status",
+            description="my servers are real cold rn!!! rip polar caps",
+            color=discord.Color.blue()
+        )
 
-        embed = discord.Embed(title="Luna Bot Status",description="my servers are real cold rn!!! rip polar caps",color=discord.Color.blue())
         embed.add_field(name="Bot", value=f"{bot.user}", inline=True)
         embed.add_field(name="Latency", value=f"{latency}ms", inline=True)
         embed.add_field(name="Uptime", value=f"{hours}h {minutes}m {seconds}s", inline=True)
-        servers = "\n".join(f"{g.name} (`{g.id}`)" for g in bot.guilds)
 
-        embed.add_field(
-            name=f"Servers ({len(bot.guilds)})",
-            value=servers[:1024] if servers else "None",
-            inline=False
-        )
-        embed.add_field(name="Members", value=str(users), inline=True)
         embed.add_field(name="Commands", value=str(len(bot.tree.get_commands())), inline=True)
-        queue_len = len(get_queue(guild.id)) if guild else 0
-        embed.add_field(name="Music", value=f"Queue: {queue_len}", inline=True)
-        embed.add_field(name="Voice", value=voice_status, inline=False)
         embed.add_field(name="Python", value=platform.python_version(), inline=True)
         embed.add_field(name="discord.py", value=discord.__version__, inline=True)
         embed.add_field(name="OS", value=platform.system(), inline=True)
-        embed.add_field(name="Intents",value=(f"Message Content: {bot.intents.message_content}\n"f"Members: {bot.intents.members}\n"f"Voice States: {bot.intents.voice_states}"f"Presence Updates{bot.intents.presences}"),inline=False)
+
+        if guild is not None:
+            users = guild.member_count or 0
+            queue_len = len(get_queue(guild.id))
+
+            vc = guild.voice_client
+            voice_status = "Not connected"
+
+            if vc:
+                voice_status = f"Connected to {vc.channel.name}"
+                if vc.is_playing():
+                    voice_status += " | Playing"
+                elif vc.is_paused():
+                    voice_status += " | Paused"
+                else:
+                    voice_status += " | Idle"
+
+            embed.add_field(name="Server", value=guild.name, inline=True)
+            embed.add_field(name="Members", value=str(users), inline=True)
+            embed.add_field(name="Music", value=f"Queue: {queue_len}", inline=True)
+            embed.add_field(name="Voice", value=voice_status, inline=False)
+
+        else:
+            embed.add_field(name="Context", value="DM", inline=True)
 
         await interaction.followup.send(embed=embed)
+
     except Exception as e:
         await interaction.followup.send(f"status crashed: `{type(e).__name__}: {e}`")
         raise
